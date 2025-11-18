@@ -37,6 +37,28 @@ class MongoService:
         except PyMongoError as e:
             raise Exception(f"Failed to connect to MongoDB: {e}")
     
+    def _convert_objectids_to_str(self, doc: Dict[str, Any]) -> None:
+        """
+        Recursively convert ObjectId fields to strings in a document.
+        
+        Args:
+            doc: Document dictionary to process (modified in place)
+        """
+        if not isinstance(doc, dict):
+            return
+        
+        for key, value in list(doc.items()):
+            if isinstance(value, ObjectId):
+                doc[key] = str(value)
+            elif isinstance(value, dict):
+                self._convert_objectids_to_str(value)
+            elif isinstance(value, list):
+                for i, item in enumerate(value):
+                    if isinstance(item, ObjectId):
+                        value[i] = str(item)
+                    elif isinstance(item, dict):
+                        self._convert_objectids_to_str(item)
+    
     def create_dataset(self, dataset: Dataset) -> str:
         """
         Create a new dataset with error handling.
@@ -52,8 +74,27 @@ class MongoService:
             Exception: For other database errors
         """
         try:
-            result = self.datasets.insert_one(dataset.dict(by_alias=True))
+            # Convert to dict with alias
+            dataset_dict = dataset.dict(by_alias=True)
+            
+            # Ensure _id is ObjectId, not string
+            if "_id" in dataset_dict and isinstance(dataset_dict["_id"], str):
+                dataset_dict["_id"] = ObjectId(dataset_dict["_id"])
+            elif "_id" not in dataset_dict or not isinstance(dataset_dict["_id"], ObjectId):
+                # Generate new ObjectId if missing or invalid
+                dataset_dict["_id"] = ObjectId()
+            
+            result = self.datasets.insert_one(dataset_dict)
+            
+            # Verify insertion was successful
+            if not result.acknowledged:
+                raise Exception("Dataset insertion was not acknowledged by MongoDB")
+            
+            if not result.inserted_id:
+                raise Exception("No dataset ID returned from MongoDB")
+            
             return str(result.inserted_id)
+            
         except DuplicateKeyError:
             raise ValueError(f"Dataset with name '{dataset.name}' already exists")
         except PyMongoError as e:
@@ -69,13 +110,26 @@ class MongoService:
         Returns:
             Optional[Dict]: Dataset data or None
         """
-        dataset = self.datasets.find_one({"_id": ObjectId(dataset_id)})
-        if dataset:
-            dataset["_id"] = str(dataset["_id"])
-            for key, value in dataset.items():
-                if isinstance(value, ObjectId):
-                    dataset[key] = str(value)
-        return dataset
+        try:
+            # Validate ObjectId format
+            if not ObjectId.is_valid(dataset_id):
+                print(f"Invalid ObjectId format: {dataset_id}")
+                return None
+            
+            dataset = self.datasets.find_one({"_id": ObjectId(dataset_id)})
+            if dataset:
+                dataset["id"] = str(dataset["_id"])
+                del dataset["_id"]  # Remove _id and use id instead
+                # Convert any other ObjectId fields to string
+                for key, value in dataset.items():
+                    if isinstance(value, ObjectId):
+                        dataset[key] = str(value)
+            else:
+                print(f"No dataset found with ID: {dataset_id}")
+            return dataset
+        except Exception as e:
+            print(f"Error in get_dataset: {e}")
+            return None
     
     def list_datasets(self, skip: int = 0, limit: int = 100) -> List[Dict[str, Any]]:
         """
@@ -91,7 +145,12 @@ class MongoService:
         cursor = self.datasets.find().skip(skip).limit(limit).sort("created_at", -1)
         datasets = []
         for dataset in cursor:
-            dataset["_id"] = str(dataset["_id"])
+            dataset["id"] = str(dataset["_id"])
+            del dataset["_id"]  # Remove _id and use id instead
+            # Convert any other ObjectId fields to string
+            for key, value in dataset.items():
+                if isinstance(value, ObjectId):
+                    dataset[key] = str(value)
             datasets.append(dataset)
         return datasets
     
@@ -132,7 +191,20 @@ class MongoService:
         Returns:
             str: Created image ID
         """
-        result = self.images.insert_one(image.dict(by_alias=True))
+        # Convert to dict with alias
+        image_dict = image.dict(by_alias=True)
+        
+        # Ensure _id is ObjectId, not string
+        if "_id" in image_dict and isinstance(image_dict["_id"], str):
+            image_dict["_id"] = ObjectId(image_dict["_id"])
+        elif "_id" not in image_dict or not isinstance(image_dict["_id"], ObjectId):
+            image_dict["_id"] = ObjectId()
+        
+        # Ensure dataset_id is ObjectId if present
+        if "dataset_id" in image_dict and isinstance(image_dict["dataset_id"], str):
+            image_dict["dataset_id"] = ObjectId(image_dict["dataset_id"])
+        
+        result = self.images.insert_one(image_dict)
         return str(result.inserted_id)
     
     def get_images_by_dataset(self, dataset_id: str, skip: int = 0, 
@@ -156,7 +228,8 @@ class MongoService:
         cursor = self.images.find(query).skip(skip).limit(limit)
         images = []
         for image in cursor:
-            image["_id"] = str(image["_id"])
+            image["id"] = str(image["_id"])
+            del image["_id"]  # Remove _id and use id instead
             image["dataset_id"] = str(image["dataset_id"])
             self._convert_objectids_to_str(image)
             images.append(image)
@@ -174,7 +247,8 @@ class MongoService:
         """
         image = self.images.find_one({"_id": ObjectId(image_id)})
         if image:
-            image["_id"] = str(image["_id"])
+            image["id"] = str(image["_id"])
+            del image["_id"]  # Remove _id and use id instead
             image["dataset_id"] = str(image["dataset_id"])
             self._convert_objectids_to_str(image)
         return image

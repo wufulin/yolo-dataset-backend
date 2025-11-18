@@ -1,15 +1,98 @@
 """Dataset management API endpoints."""
 from typing import Optional, List
+from datetime import datetime
 from fastapi import APIRouter, HTTPException, status, Query, Depends
+from bson import ObjectId
 from app.auth import authenticate_user
 from app.schemas.dataset import (
     DatasetResponse, ImageResponse, PaginatedResponse, DatasetCreate
 )
+from app.models.dataset import Dataset
 from app.services.mongo_service import mongo_service
 from app.services.minio_service import minio_service
 
 
 router = APIRouter()
+
+
+@router.post("/datasets", response_model=DatasetResponse, status_code=status.HTTP_201_CREATED)
+async def create_dataset(
+    dataset_data: DatasetCreate,
+    username: str = Depends(authenticate_user)
+):
+    """
+    Create a new dataset.
+    
+    Args:
+        dataset_data: Dataset creation data
+        username: Authenticated username
+        
+    Returns:
+        DatasetResponse: Created dataset information
+    """
+    # Validate dataset_type
+    valid_types = ['detect', 'obb', 'segment', 'pose', 'classify']
+    if dataset_data.dataset_type not in valid_types:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid dataset_type. Must be one of: {', '.join(valid_types)}"
+        )
+    
+    # Create Dataset model
+    dataset = Dataset(
+        name=dataset_data.name,
+        description=dataset_data.description,
+        dataset_type=dataset_data.dataset_type,
+        class_names=dataset_data.class_names if dataset_data.class_names else [],
+        num_images=0,
+        num_annotations=0,
+        splits={"train": 0, "val": 0, "test": 0},
+        status="active",
+        error_message=None,
+        file_size=0,
+        storage_path=None,
+        created_by=username,
+        created_at=datetime.utcnow(),
+        updated_at=datetime.utcnow(),
+        version=1
+    )
+    
+    try:
+        # Create dataset in MongoDB
+        dataset_id = mongo_service.create_dataset(dataset)
+        
+        # Verify dataset_id is valid
+        if not dataset_id:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Dataset creation failed: No ID returned"
+            )
+        
+        # Retrieve and return created dataset
+        created_dataset = mongo_service.get_dataset(dataset_id)
+        if not created_dataset:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to retrieve created dataset with ID: {dataset_id}"
+            )
+        
+        return DatasetResponse(**created_dataset)
+        
+    except ValueError as e:
+        # Handle duplicate name error
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(e)
+        )
+    except HTTPException:
+        # Re-raise HTTPException as-is
+        raise
+    except Exception as e:
+        # Handle all other errors
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to create dataset: {str(e)}"
+        )
 
 
 @router.get("/datasets", response_model=PaginatedResponse)

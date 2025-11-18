@@ -57,7 +57,7 @@ class Dataset(BaseModel):
     name: str = Field(..., min_length=1, max_length=100, description="Dataset name")
     description: Optional[str] = Field(None, max_length=500, description="Dataset description")
     dataset_type: str = Field(..., description="Dataset type: detect/obb/segment/pose/classify")
-    class_names: List[str] = Field(..., min_items=1, description="List of class names")
+    class_names: List[str] = Field(default_factory=list, description="List of class names")
     num_images: int = Field(0, ge=0, description="Number of images in dataset")
     num_annotations: int = Field(0, ge=0, description="Total number of annotations")
     splits: Dict[str, int] = Field(default_factory=dict, description="Split counts")
