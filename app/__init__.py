@@ -1,5 +1,5 @@
 """
-FastAPI Backend Service - YOLO Dataset Management Module
+FastAPI Backend Service - YOLO Dataset Module
 """
 
 __version__ = "1.0.0"

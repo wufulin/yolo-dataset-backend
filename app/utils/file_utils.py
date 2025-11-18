@@ -2,7 +2,6 @@
 import os
 import hashlib
 import shutil
-from typing import Optional
 from pathlib import Path
 
 

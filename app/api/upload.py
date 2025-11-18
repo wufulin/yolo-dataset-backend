@@ -1,15 +1,18 @@
 """File upload API endpoints."""
 import os
 import uuid
-from typing import Optional, List, Dict, Any
+from typing import Optional, List
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException, status, Depends
 from app.auth import authenticate_user
 from app.config import settings
-from app.utils.file_utils import ensure_directory, safe_remove, get_file_hash
+from app.utils.file_utils import ensure_directory, safe_remove
 from app.schemas.dataset import UploadResponse, UploadComplete
 from app.services.yolo_validator import yolo_validator
 from app.services.mongo_service import mongo_service
 from app.services.minio_service import minio_service
+from app.utils.logger import get_logger
+
+logger = get_logger(__name__)
 
 
 router = APIRouter()
@@ -273,9 +276,9 @@ async def process_images(dataset_root: str, dataset_id: str, dataset_type: str,
                     class_names, dataset_root
                 )
                 split_processed += 1
-                processed_count += 1
+                processed_count += 1                
             except Exception as e:
-                print(f"Error processing image {image_file}: {str(e)}")
+                logger.error(f"Error processing image {image_file}: {str(e)}", exc_info=True)
                 continue
     
     return processed_count

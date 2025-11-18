@@ -77,3 +77,5 @@ dmypy.json
 uploads/
 /tmp/yolo_uploads/
 
+# data
+data/coco8-detect/

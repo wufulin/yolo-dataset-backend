@@ -52,6 +52,8 @@ Stores image metadata and annotation information.
       class_id: Number,
       class_name: String,
       confidence: Number,          // Confidence (optional)
+      image_id: ObjectId,
+      dataset_id: ObjectId,
       
       // For bbox
       bbox: {
@@ -83,16 +85,13 @@ Stores image metadata and annotation information.
         class_name: String
       },
       
-      created_at: ISODate
+      created_at: ISODate,
+      updated_at: ISODate
     }
   ],
   metadata: {                      // Extended metadata
-    exposure_time: Number,         // Exposure time (optional)
-    camera_model: String,          // Camera model (optional)
-    gps: {                         // GPS information (optional)
-      lat: Number,
-      lng: Number
-    }
+    source: String,                 // source (optional)
+    original_path: String         // original_path (optional)
   },
   is_annotated: Boolean,           // Whether annotated
   annotation_count: Number,        // Number of annotations

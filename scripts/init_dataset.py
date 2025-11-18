@@ -24,6 +24,9 @@ from minio import Minio
 from minio.error import S3Error
 
 from app.config import settings
+from app.utils.logger import get_logger
+
+logger = get_logger(__name__)
 
 
 class YOLODatasetImporter:
@@ -62,19 +65,19 @@ class YOLODatasetImporter:
         self.class_names = []
         self.dataset_id = None
         
-        print(f"✓ Connected to MongoDB: {settings.mongo_db_name}")
-        print(f"✓ Connected to MinIO: {settings.minio_endpoint}")
+        logger.info(f"✓ Connected to MongoDB: {settings.mongo_db_name}")
+        logger.info(f"✓ Connected to MinIO: {settings.minio_endpoint}")
     
     def _ensure_bucket_exists(self):
         """Ensure MinIO bucket exists, create if not exists"""
         try:
             if not self.minio_client.bucket_exists(self.bucket_name):
                 self.minio_client.make_bucket(self.bucket_name)
-                print(f"✓ Created MinIO bucket: {self.bucket_name}")
+                logger.info(f"✓ Created MinIO bucket: {self.bucket_name}")
             else:
-                print(f"✓ MinIO bucket exists: {self.bucket_name}")
+                logger.info(f"✓ MinIO bucket exists: {self.bucket_name}")
         except S3Error as e:
-            print(f"⚠ MinIO bucket check/creation failed: {e}")
+            logger.error(f"⚠ MinIO bucket check/creation failed: {e}")
             raise
     
     def upload_to_minio(self, local_path: Path, minio_path: str) -> bool:
@@ -105,7 +108,7 @@ class YOLODatasetImporter:
             )
             return True
         except S3Error as e:
-            print(f"  ⚠ MinIO upload failed: {e}")
+            logger.error(f"  ⚠ MinIO upload failed: {e}")
             return False
     
     def load_yaml_config(self) -> Dict[str, Any]:
@@ -119,9 +122,9 @@ class YOLODatasetImporter:
         self.dataset_config = config
         self.class_names = [config['names'][i] for i in sorted(config['names'].keys())]
         
-        print(f"✓ Loaded config file")
-        print(f"  Number of classes: {len(self.class_names)}")
-        print(f"  Class list: {', '.join(self.class_names[:10])}{'...' if len(self.class_names) > 10 else ''}")
+        logger.info(f"✓ Loaded config file")
+        logger.info(f"  Number of classes: {len(self.class_names)}")
+        logger.info(f"  Class list: {', '.join(self.class_names[:10])}{'...' if len(self.class_names) > 10 else ''}")
         
         return config
     
@@ -172,7 +175,7 @@ class YOLODatasetImporter:
             try:
                 parts = line.split()
                 if len(parts) < 5:
-                    print(f"  ⚠ Skipping invalid line {line_num}: {line}")
+                    logger.error(f"  ⚠ Skipping invalid line {line_num}: {line}")
                     continue
                 
                 class_id = int(parts[0])
@@ -183,11 +186,11 @@ class YOLODatasetImporter:
                 
                 # Validate normalized coordinates
                 if not (0 <= x_center <= 1 and 0 <= y_center <= 1 and 0 <= width <= 1 and 0 <= height <= 1):
-                    print(f"  ⚠ Skipping out-of-range annotation line {line_num}: {line}")
+                    logger.error(f"  ⚠ Skipping out-of-range annotation line {line_num}: {line}")
                     continue
                 
                 if class_id >= len(class_names):
-                    print(f"  ⚠ Skipping unknown class ID {class_id} (line {line_num})")
+                    logger.error(f"  ⚠ Skipping unknown class ID {class_id} (line {line_num})")
                     continue
                 
                 annotation = {
@@ -212,7 +215,7 @@ class YOLODatasetImporter:
                 annotations.append(annotation)
                 
             except (ValueError, IndexError) as e:
-                print(f"  ⚠ Parse error (line {line_num}): {e}")
+                logger.error(f"  ⚠ Parse error (line {line_num}): {e}")
                 continue
         
         return annotations
@@ -227,7 +230,7 @@ class YOLODatasetImporter:
         # Check if dataset with same name already exists
         existing = self.datasets_collection.find_one({"name": "COCO8-Detect"})
         if existing:
-            print(f"⚠ Dataset 'COCO8-Detect' already exists, deleting old data...")
+            logger.error(f"⚠ Dataset 'COCO8-Detect' already exists, deleting old data...")
             self.datasets_collection.delete_one({"_id": existing["_id"]})
             self.images_collection.delete_many({"dataset_id": existing["_id"]})
         
@@ -256,7 +259,7 @@ class YOLODatasetImporter:
         result = self.datasets_collection.insert_one(dataset_doc)
         self.dataset_id = result.inserted_id
         
-        print(f"✓ Created dataset record (ID: {self.dataset_id})")
+        logger.info(f"✓ Created dataset record (ID: {self.dataset_id})")
         return str(self.dataset_id)
     
     def process_split(self, split_name: str) -> Tuple[int, int, int]:
@@ -273,14 +276,14 @@ class YOLODatasetImporter:
         labels_dir = self.dataset_path / "labels" / split_name
         
         if not images_dir.exists():
-            print(f"  ⚠ Images directory not found: {images_dir}")
+            logger.error(f"  ⚠ Images directory not found: {images_dir}")
             return 0, 0, 0
         
         # Get all image files
         image_files = list(images_dir.glob("*.jpg")) + list(images_dir.glob("*.png"))
         
-        print(f"\nProcessing {split_name} split:")
-        print(f"  Number of images: {len(image_files)}")
+        logger.info(f"\nProcessing {split_name} split:")
+        logger.info(f"  Number of images: {len(image_files)}")
         
         image_count = 0
         annotation_count = 0
@@ -314,7 +317,7 @@ class YOLODatasetImporter:
                 # Upload image to MinIO
                 upload_success = self.upload_to_minio(image_path, minio_file_path)
                 if not upload_success:
-                    print(f"  ✗ Skipped {image_path.name}: MinIO upload failed")
+                    logger.error(f"  ✗ Skipped {image_path.name}: MinIO upload failed")
                     continue
                 
                 # Create image document
@@ -347,10 +350,10 @@ class YOLODatasetImporter:
                 image_count += 1
                 annotation_count += len(annotations)
                 
-                print(f"  ✓ {image_path.name}: {width}x{height}, {len(annotations)} annotations, {file_size/1024:.1f}KB [Uploaded to MinIO]")
+                logger.info(f"  ✓ {image_path.name}: {width}x{height}, {len(annotations)} annotations, {file_size/1024:.1f}KB [Uploaded to MinIO]")
                 
             except Exception as e:
-                print(f"  ✗ Processing failed {image_path.name}: {e}")
+                logger.error(f"  ✗ Processing failed {image_path.name}: {e}", exc_info=True)
                 continue
         
         return image_count, annotation_count, total_file_size
@@ -377,18 +380,18 @@ class YOLODatasetImporter:
             }
         )
         
-        print(f"\n✓ Dataset statistics updated")
-        print(f"  Total images: {train_images + val_images}")
-        print(f"  Total annotations: {train_annotations + val_annotations}")
-        print(f"  Dataset size: {total_size / 1024 / 1024:.2f} MB")
-        print(f"  Train set: {train_images} images, {train_annotations} annotations, {train_size / 1024 / 1024:.2f} MB")
-        print(f"  Val set: {val_images} images, {val_annotations} annotations, {val_size / 1024 / 1024:.2f} MB")
+        logger.info(f"\n✓ Dataset statistics updated")
+        logger.info(f"  Total images: {train_images + val_images}")
+        logger.info(f"  Total annotations: {train_annotations + val_annotations}")
+        logger.info(f"  Dataset size: {total_size / 1024 / 1024:.2f} MB")
+        logger.info(f"  Train set: {train_images} images, {train_annotations} annotations, {train_size / 1024 / 1024:.2f} MB")
+        logger.info(f"  Val set: {val_images} images, {val_annotations} annotations, {val_size / 1024 / 1024:.2f} MB")
     
     def import_dataset(self):
         """Execute complete dataset import workflow"""
-        print("=" * 60)
-        print("YOLO Dataset Import Tool")
-        print("=" * 60)
+        logger.info("=" * 60)
+        logger.info("YOLO Dataset Import Tool")
+        logger.info("=" * 60)
         
         try:
             # 1. Load configuration
@@ -409,12 +412,12 @@ class YOLODatasetImporter:
                 val_images, val_annotations, val_size
             )
             
-            print("\n" + "=" * 60)
-            print("✓ Dataset import successful!")
-            print("=" * 60)
+            logger.info("\n" + "=" * 60)
+            logger.info("✓ Dataset import successful!")
+            logger.info("=" * 60)
             
         except Exception as e:
-            print(f"\n✗ Import failed: {e}")
+            logger.error(f"\n✗ Import failed: {e}", exc_info=True)
             # If failed, update dataset status to error
             if self.dataset_id:
                 self.datasets_collection.update_one(
@@ -440,7 +443,7 @@ def main():
     
     # Check if path exists
     if not os.path.exists(dataset_path):
-        print(f"✗ Error: Dataset path does not exist: {dataset_path}")
+        logger.error(f"✗ Error: Dataset path does not exist: {dataset_path}")
         sys.exit(1)
     
     # Create importer and execute import

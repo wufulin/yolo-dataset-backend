@@ -1,8 +1,7 @@
 """Dataset management API endpoints."""
-from typing import Optional, List
+from typing import Optional
 from datetime import datetime
 from fastapi import APIRouter, HTTPException, status, Query, Depends
-from bson import ObjectId
 from app.auth import authenticate_user
 from app.schemas.dataset import (
     DatasetResponse, ImageResponse, PaginatedResponse, DatasetCreate
@@ -10,7 +9,9 @@ from app.schemas.dataset import (
 from app.models.dataset import Dataset
 from app.services.mongo_service import mongo_service
 from app.services.minio_service import minio_service
+from app.utils.logger import get_logger
 
+logger = get_logger(__name__)
 
 router = APIRouter()
 
@@ -30,9 +31,12 @@ async def create_dataset(
     Returns:
         DatasetResponse: Created dataset information
     """
+    logger.info(f"Creating dataset '{dataset_data.name}' of type '{dataset_data.dataset_type}' by user '{username}'")
+    
     # Validate dataset_type
     valid_types = ['detect', 'obb', 'segment', 'pose', 'classify']
     if dataset_data.dataset_type not in valid_types:
+        logger.error(f"Invalid dataset_type: {dataset_data.dataset_type}")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Invalid dataset_type. Must be one of: {', '.join(valid_types)}"
@@ -63,6 +67,7 @@ async def create_dataset(
         
         # Verify dataset_id is valid
         if not dataset_id:
+            logger.error("Dataset creation failed: No ID returned")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Dataset creation failed: No ID returned"
@@ -71,15 +76,18 @@ async def create_dataset(
         # Retrieve and return created dataset
         created_dataset = mongo_service.get_dataset(dataset_id)
         if not created_dataset:
+            logger.error(f"Failed to retrieve created dataset with ID: {dataset_id}")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"Failed to retrieve created dataset with ID: {dataset_id}"
             )
         
+        logger.info(f"Dataset '{dataset_data.name}' created successfully with ID: {dataset_id}")
         return DatasetResponse(**created_dataset)
         
     except ValueError as e:
         # Handle duplicate name error
+        logger.error(f"Dataset creation failed - duplicate name: {e}")
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=str(e)
@@ -89,6 +97,7 @@ async def create_dataset(
         raise
     except Exception as e:
         # Handle all other errors
+        logger.error(f"Failed to create dataset: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to create dataset: {str(e)}"
@@ -111,19 +120,27 @@ async def list_datasets(
     Returns:
         PaginatedResponse: Paginated list of datasets
     """
+    logger.info(f"Listing datasets: page={page}, page_size={page_size}")
     skip = (page - 1) * page_size
     
-    datasets = mongo_service.list_datasets(skip=skip, limit=page_size)
-    
-    total = mongo_service.datasets.count_documents({})
-
-    return PaginatedResponse(
-        items=datasets,
-        total=total,
-        page=page,
-        page_size=page_size,
-        total_pages=(total + page_size - 1) // page_size
-    )
+    try:
+        datasets = mongo_service.list_datasets(skip=skip, limit=page_size)
+        total = mongo_service.datasets.count_documents({})
+        
+        logger.info(f"Retrieved {len(datasets)} datasets (total: {total})")
+        return PaginatedResponse(
+            items=datasets,
+            total=total,
+            page=page,
+            page_size=page_size,
+            total_pages=(total + page_size - 1) // page_size
+        )
+    except Exception as e:
+        logger.error(f"Failed to list datasets: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to list datasets: {str(e)}"
+        )
 
 
 @router.get("/datasets/{dataset_id}", response_model=DatasetResponse)
@@ -140,14 +157,27 @@ async def get_dataset(
     Returns:
         DatasetResponse: Dataset information
     """
-    dataset = mongo_service.get_dataset(dataset_id)
-    if not dataset:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Dataset not found"
-        )
+    logger.info(f"Retrieving dataset with ID: {dataset_id}")
     
-    return DatasetResponse(**dataset)
+    try:
+        dataset = mongo_service.get_dataset(dataset_id)
+        if not dataset:
+            logger.error(f"Dataset not found with ID: {dataset_id}")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Dataset not found"
+            )
+        
+        logger.info(f"Retrieved dataset: {dataset.get('name', 'Unknown')} (ID: {dataset_id})")
+        return DatasetResponse(**dataset)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get dataset {dataset_id}: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve dataset: {str(e)}"
+        )
 
 
 @router.get("/datasets/{dataset_id}/images", response_model=PaginatedResponse)
@@ -170,32 +200,45 @@ async def get_dataset_images(
     Returns:
         PaginatedResponse: Paginated list of images
     """
-    # Verify dataset exists
-    dataset = mongo_service.get_dataset(dataset_id)
-    if not dataset:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Dataset not found"
+    logger.info(f"Getting images for dataset {dataset_id}: page={page}, page_size={page_size}, split={split}")
+    
+    try:
+        # Verify dataset exists
+        dataset = mongo_service.get_dataset(dataset_id)
+        if not dataset:
+            logger.error(f"Dataset not found with ID: {dataset_id}")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Dataset not found"
+            )
+        
+        skip = (page - 1) * page_size
+        images = mongo_service.get_images_by_dataset(
+            dataset_id, skip=skip, limit=page_size, split=split
         )
-    
-    skip = (page - 1) * page_size
-    images = mongo_service.get_images_by_dataset(
-        dataset_id, skip=skip, limit=page_size, split=split
-    )
-    
-    # Generate presigned URLs for images
-    for image in images:
-        image["file_url"] = minio_service.get_file_url(image["file_path"])
-    
-    total = mongo_service.count_images(dataset_id, split=split)
-    
-    return PaginatedResponse(
-        items=images,
-        total=total,
-        page=page,
-        page_size=page_size,
-        total_pages=(total + page_size - 1) // page_size
-    )
+        
+        # Generate presigned URLs for images
+        for image in images:
+            image["file_url"] = minio_service.get_file_url(image["file_path"])
+        
+        total = mongo_service.count_images(dataset_id, split=split)
+        
+        logger.info(f"Retrieved {len(images)} images for dataset {dataset_id} (total: {total})")
+        return PaginatedResponse(
+            items=images,
+            total=total,
+            page=page,
+            page_size=page_size,
+            total_pages=(total + page_size - 1) // page_size
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get images for dataset {dataset_id}: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve images: {str(e)}"
+        )
 
 
 @router.get("/images/{image_id}", response_model=ImageResponse)
@@ -212,17 +255,30 @@ async def get_image(
     Returns:
         ImageResponse: Image information with annotations
     """
-    image = mongo_service.get_image(image_id)
-    if not image:
+    logger.info(f"Retrieving image with ID: {image_id}")
+    
+    try:
+        image = mongo_service.get_image(image_id)
+        if not image:
+            logger.error(f"Image not found with ID: {image_id}")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Image not found"
+            )
+        
+        # Generate presigned URL
+        image["file_url"] = minio_service.get_file_url(image["file_path"])
+        
+        logger.info(f"Retrieved image {image_id} from dataset {image.get('dataset_id', 'Unknown')}")
+        return ImageResponse(**image)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get image {image_id}: {e}", exc_info=True)
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Image not found"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve image: {str(e)}"
         )
-    
-    # Generate presigned URL
-    image["file_url"] = minio_service.get_file_url(image["file_path"])
-    
-    return ImageResponse(**image)
 
 
 @router.delete("/datasets/{dataset_id}")
@@ -239,21 +295,35 @@ async def delete_dataset(
     Returns:
         dict: Deletion status
     """
-    # Verify dataset exists
-    dataset = mongo_service.get_dataset(dataset_id)
-    if not dataset:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Dataset not found"
-        )
+    logger.info(f"Deleting dataset {dataset_id} by user '{username}'")
     
-    # Delete from MongoDB and MinIO
-    success = mongo_service.delete_dataset(dataset_id)
-    
-    if success:
-        return {"status": "success", "message": "Dataset deleted successfully"}
-    else:
+    try:
+        # Verify dataset exists
+        dataset = mongo_service.get_dataset(dataset_id)
+        if not dataset:
+            logger.error(f"Dataset not found with ID: {dataset_id}")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Dataset not found"
+            )
+        
+        # Delete from MongoDB and MinIO
+        success = mongo_service.delete_dataset(dataset_id)
+        
+        if success:
+            logger.info(f"Dataset {dataset_id} deleted successfully")
+            return {"status": "success", "message": "Dataset deleted successfully"}
+        else:
+            logger.error(f"Failed to delete dataset {dataset_id}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to delete dataset"
+            )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to delete dataset {dataset_id}: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to delete dataset"
+            detail=f"Failed to delete dataset: {str(e)}"
         )

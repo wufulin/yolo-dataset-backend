@@ -2,10 +2,11 @@
 from typing import List, Optional, Dict, Any, Tuple
 from datetime import datetime
 from bson import ObjectId
-from pymongo import ReturnDocument
-from app.config import settings
-from app.models.annotation import Annotation, AnnotationStats, AnnotationFilter, BaseAnnotation
+from app.models.annotation import BaseAnnotation
 from app.services.mongo_service import mongo_service
+from app.utils.logger import get_logger
+
+logger = get_logger(__name__)
 
 
 class AnnotationService:
@@ -13,9 +14,11 @@ class AnnotationService:
     
     def __init__(self):
         """Initialize annotation service."""
+        logger.info("Initializing annotation service")
         self.db = mongo_service.db
         self.annotations = self.db.annotations
         self.annotation_stats = self.db.annotation_stats
+        logger.info("Annotation service initialized successfully")
     
     def create_annotation(self, annotation_data: dict) -> str:
         """
@@ -27,10 +30,13 @@ class AnnotationService:
         Returns:
             str: Created annotation ID
         """
+        logger.info(f"Creating annotation for image {annotation_data.get('image_id')}")
+        
         # Validate required fields
         required_fields = ['image_id', 'dataset_id', 'class_id', 'class_name', 'annotation_type']
         for field in required_fields:
             if field not in annotation_data:
+                logger.error(f"Missing required field: {field}")
                 raise ValueError(f"Missing required field: {field}")
         
         # Convert string IDs to ObjectId
@@ -40,6 +46,8 @@ class AnnotationService:
         # Insert annotation
         result = self.annotations.insert_one(annotation_data)
         annotation_id = str(result.inserted_id)
+        
+        logger.info(f"Annotation created successfully with ID: {annotation_id}")
         
         # Update image annotation count
         self._update_image_annotation_count(annotation_data['image_id'])
@@ -59,9 +67,12 @@ class AnnotationService:
         Returns:
             Optional[Dict]: Annotation data or None
         """
+        logger.info(f"Retrieving annotation with ID: {annotation_id}")
         annotation = self.annotations.find_one({"_id": ObjectId(annotation_id)})
         if annotation:
+            logger.info(f"Annotation {annotation_id} found")
             return self._convert_object_ids(annotation)
+        logger.info(f"Annotation {annotation_id} not found")
         return None
     
     def get_annotations_by_image(self, image_id: str) -> List[Dict[str, Any]]:
@@ -74,10 +85,12 @@ class AnnotationService:
         Returns:
             List[Dict]: List of annotations
         """
+        logger.info(f"Retrieving annotations for image: {image_id}")
         cursor = self.annotations.find({"image_id": ObjectId(image_id)})
         annotations = []
         for annotation in cursor:
             annotations.append(self._convert_object_ids(annotation))
+        logger.info(f"Retrieved {len(annotations)} annotations for image {image_id}")
         return annotations
     
     def get_annotations_with_filter(self, filter_criteria: Dict[str, Any], 
@@ -93,6 +106,8 @@ class AnnotationService:
         Returns:
             Tuple[List[Dict], int]: (annotations, total_count)
         """
+        logger.info(f"Filtering annotations with criteria: {filter_criteria}, skip={skip}, limit={limit}")
+        
         # Apply filter and get total count
         total = self.annotations.count_documents(filter_criteria)
         
@@ -102,6 +117,7 @@ class AnnotationService:
         for annotation in cursor:
             annotations.append(self._convert_object_ids(annotation))
         
+        logger.info(f"Retrieved {len(annotations)} annotations (total: {total})")
         return annotations, total
     
     def update_annotation(self, annotation_id: str, update_data: Dict[str, Any]) -> bool:
@@ -115,6 +131,8 @@ class AnnotationService:
         Returns:
             bool: True if successful
         """
+        logger.info(f"Updating annotation {annotation_id}")
+        
         # Remove immutable fields
         immutable_fields = ['_id', 'image_id', 'dataset_id', 'annotation_type', 'created_at']
         for field in immutable_fields:
@@ -128,6 +146,11 @@ class AnnotationService:
             {"$set": update_data}
         )
         
+        if result.modified_count > 0:
+            logger.info(f"Annotation {annotation_id} updated successfully")
+        else:
+            logger.error(f"Annotation {annotation_id} not modified")
+        
         return result.modified_count > 0
     
     def delete_annotation(self, annotation_id: str) -> bool:
@@ -140,15 +163,20 @@ class AnnotationService:
         Returns:
             bool: True if successful
         """
+        logger.info(f"Deleting annotation {annotation_id}")
+        
         # Get annotation before deletion to update counts
         annotation = self.get_annotation(annotation_id)
         if not annotation:
+            logger.error(f"Annotation {annotation_id} not found for deletion")
             return False
         
         # Delete annotation
         result = self.annotations.delete_one({"_id": ObjectId(annotation_id)})
         
         if result.deleted_count > 0:
+            logger.info(f"Annotation {annotation_id} deleted successfully")
+            
             # Update image annotation count
             self._update_image_annotation_count(ObjectId(annotation['image_id']))
             
@@ -157,6 +185,7 @@ class AnnotationService:
             
             return True
         
+        logger.error(f"Failed to delete annotation {annotation_id}")
         return False
     
     def get_dataset_annotation_stats(self, dataset_id: str) -> Dict[str, Any]:
@@ -169,6 +198,8 @@ class AnnotationService:
         Returns:
             Dict: Annotation statistics
         """
+        logger.info(f"Getting annotation stats for dataset {dataset_id}")
+        
         pipeline = [
             {"$match": {"dataset_id": ObjectId(dataset_id)}},
             {"$group": {
@@ -194,14 +225,17 @@ class AnnotationService:
             for ann_type in stats.get('annotations_by_type', []):
                 type_counts[ann_type] = type_counts.get(ann_type, 0) + 1
             
-            return {
+            stats_result = {
                 "dataset_id": dataset_id,
                 "total_annotations": stats.get('total_annotations', 0),
                 "annotations_by_class": class_counts,
                 "annotations_by_type": type_counts,
                 "avg_confidence": stats.get('avg_confidence')
             }
+            logger.info(f"Annotation stats for dataset {dataset_id}: {stats.get('total_annotations', 0)} annotations")
+            return stats_result
         
+        logger.info(f"No annotations found for dataset {dataset_id}")
         return {
             "dataset_id": dataset_id,
             "total_annotations": 0,
@@ -221,6 +255,8 @@ class AnnotationService:
         Returns:
             Dict: Class distribution
         """
+        logger.info(f"Getting class distribution for dataset {dataset_id}, split={split}")
+        
         # Build match stage
         match_stage = {"dataset_id": ObjectId(dataset_id)}
         if split:
@@ -267,6 +303,7 @@ class AnnotationService:
             total_annotations = sum(class_distribution.values())
             total_images = mongo_service.count_images(dataset_id)
         
+        logger.info(f"Class distribution for dataset {dataset_id}: {len(class_distribution)} classes, {total_annotations} annotations")
         return {
             "dataset_id": dataset_id,
             "split": split,
@@ -283,6 +320,7 @@ class AnnotationService:
             image_id: Image ID
         """
         count = self.annotations.count_documents({"image_id": image_id})
+        logger.info(f"Updating image {image_id} annotation count to {count}")
         mongo_service.db.images.update_one(
             {"_id": image_id},
             {"$set": {
@@ -300,6 +338,7 @@ class AnnotationService:
             dataset_id: Dataset ID
         """
         count = self.annotations.count_documents({"dataset_id": dataset_id})
+        logger.info(f"Updating dataset {dataset_id} annotation count to {count}")
         mongo_service.db.datasets.update_one(
             {"_id": dataset_id},
             {"$set": {

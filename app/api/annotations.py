@@ -1,18 +1,19 @@
 """Annotation management API endpoints."""
-from typing import List, Optional
+from typing import Optional
 from fastapi import APIRouter, HTTPException, status, Query, Depends
 from bson import ObjectId
 
 from app.auth import authenticate_user
 from app.schemas.annotation import (
     AnnotationResponse,
-    AnnotationStatsResponse,
     AnnotationUpdate,
     PaginatedAnnotationsResponse
 )
 from app.services.mongo_service import mongo_service
 from app.services.annotation_service import annotation_service
+from app.utils.logger import get_logger
 
+logger = get_logger(__name__)
 
 router = APIRouter()
 
@@ -45,6 +46,8 @@ async def list_annotations(
     Returns:
         PaginatedAnnotationsResponse: Paginated list of annotations
     """
+    logger.info(f"Listing annotations with filters: dataset_id={dataset_id}, image_id={image_id}, class_name={class_name}")
+    
     # Build filter criteria
     filter_criteria = {}
     if dataset_id:
@@ -69,6 +72,7 @@ async def list_annotations(
             limit=page_size
         )
         
+        logger.info(f"Retrieved {len(annotations)} annotations (total: {total})")
         return PaginatedAnnotationsResponse(
             items=annotations,
             total=total,
@@ -78,6 +82,7 @@ async def list_annotations(
         )
         
     except Exception as e:
+        logger.error(f"Failed to fetch annotations: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to fetch annotations: {str(e)}"
@@ -98,14 +103,27 @@ async def get_annotation(
     Returns:
         AnnotationResponse: Annotation details
     """
-    annotation = annotation_service.get_annotation(annotation_id)
-    if not annotation:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Annotation not found"
-        )
+    logger.info(f"Retrieving annotation with ID: {annotation_id}")
     
-    return AnnotationResponse(**annotation)
+    try:
+        annotation = annotation_service.get_annotation(annotation_id)
+        if not annotation:
+            logger.error(f"Annotation not found with ID: {annotation_id}")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Annotation not found"
+            )
+        
+        logger.info(f"Retrieved annotation {annotation_id}")
+        return AnnotationResponse(**annotation)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get annotation {annotation_id}: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve annotation: {str(e)}"
+        )
 
 
 @router.get("/datasets/{dataset_id}/annotations/stats")
@@ -122,18 +140,25 @@ async def get_dataset_annotation_stats(
     Returns:
         dict: Annotation statistics
     """
-    # Verify dataset exists
-    dataset = mongo_service.get_dataset(dataset_id)
-    if not dataset:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Dataset not found"
-        )
+    logger.info(f"Getting annotation stats for dataset {dataset_id}")
     
     try:
+        # Verify dataset exists
+        dataset = mongo_service.get_dataset(dataset_id)
+        if not dataset:
+            logger.error(f"Dataset not found with ID: {dataset_id}")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Dataset not found"
+            )
+        
         stats = annotation_service.get_dataset_annotation_stats(dataset_id)
+        logger.info(f"Retrieved annotation stats for dataset {dataset_id}")
         return stats
+    except HTTPException:
+        raise
     except Exception as e:
+        logger.error(f"Failed to get annotation stats for dataset {dataset_id}: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to get annotation stats: {str(e)}"
@@ -154,18 +179,25 @@ async def get_image_annotations(
     Returns:
         List[AnnotationResponse]: List of annotations for the image
     """
-    # Verify image exists
-    image = mongo_service.get_image(image_id)
-    if not image:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Image not found"
-        )
+    logger.info(f"Getting annotations for image {image_id}")
     
     try:
+        # Verify image exists
+        image = mongo_service.get_image(image_id)
+        if not image:
+            logger.error(f"Image not found with ID: {image_id}")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Image not found"
+            )
+        
         annotations = annotation_service.get_annotations_by_image(image_id)
+        logger.info(f"Retrieved {len(annotations)} annotations for image {image_id}")
         return [AnnotationResponse(**ann) for ann in annotations]
+    except HTTPException:
+        raise
     except Exception as e:
+        logger.error(f"Failed to get annotations for image {image_id}: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to get image annotations: {str(e)}"
@@ -188,32 +220,46 @@ async def update_annotation(
     Returns:
         dict: Update status
     """
-    # Verify annotation exists
-    annotation = annotation_service.get_annotation(annotation_id)
-    if not annotation:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Annotation not found"
-        )
+    logger.info(f"Updating annotation {annotation_id} by user '{username}'")
     
     try:
+        # Verify annotation exists
+        annotation = annotation_service.get_annotation(annotation_id)
+        if not annotation:
+            logger.error(f"Annotation not found with ID: {annotation_id}")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Annotation not found"
+            )
+        
         success = annotation_service.update_annotation(
             annotation_id, 
             annotation_update.dict(exclude_unset=True)
         )
         
         if success:
+            logger.info(f"Annotation {annotation_id} updated successfully")
             return {"status": "success", "message": "Annotation updated successfully"}
         else:
+            logger.error(f"Failed to update annotation {annotation_id}")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Failed to update annotation"
             )
             
     except ValueError as e:
+        logger.error(f"Invalid annotation data: {e}")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e)
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to update annotation {annotation_id}: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to update annotation: {str(e)}"
         )
 
 
@@ -231,26 +277,34 @@ async def delete_annotation(
     Returns:
         dict: Deletion status
     """
-    # Verify annotation exists
-    annotation = annotation_service.get_annotation(annotation_id)
-    if not annotation:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Annotation not found"
-        )
+    logger.info(f"Deleting annotation {annotation_id} by user '{username}'")
     
     try:
+        # Verify annotation exists
+        annotation = annotation_service.get_annotation(annotation_id)
+        if not annotation:
+            logger.error(f"Annotation not found with ID: {annotation_id}")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Annotation not found"
+            )
+        
         success = annotation_service.delete_annotation(annotation_id)
         
         if success:
+            logger.info(f"Annotation {annotation_id} deleted successfully")
             return {"status": "success", "message": "Annotation deleted successfully"}
         else:
+            logger.error(f"Failed to delete annotation {annotation_id}")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Failed to delete annotation"
             )
             
+    except HTTPException:
+        raise
     except Exception as e:
+        logger.error(f"Failed to delete annotation {annotation_id}: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to delete annotation: {str(e)}"
@@ -273,18 +327,25 @@ async def get_class_distribution(
     Returns:
         dict: Class distribution statistics
     """
-    # Verify dataset exists
-    dataset = mongo_service.get_dataset(dataset_id)
-    if not dataset:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Dataset not found"
-        )
+    logger.info(f"Getting class distribution for dataset {dataset_id}, split={split}")
     
     try:
+        # Verify dataset exists
+        dataset = mongo_service.get_dataset(dataset_id)
+        if not dataset:
+            logger.error(f"Dataset not found with ID: {dataset_id}")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Dataset not found"
+            )
+        
         distribution = annotation_service.get_class_distribution(dataset_id, split)
+        logger.info(f"Retrieved class distribution for dataset {dataset_id}")
         return distribution
+    except HTTPException:
+        raise
     except Exception as e:
+        logger.error(f"Failed to get class distribution for dataset {dataset_id}: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to get class distribution: {str(e)}"

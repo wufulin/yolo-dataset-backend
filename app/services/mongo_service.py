@@ -1,10 +1,13 @@
 """MongoDB service for handling dataset and annotation operations."""
 from typing import Dict, List, Optional, Any
 from bson import ObjectId
-from pymongo import MongoClient, ReturnDocument, ASCENDING, DESCENDING
-from pymongo.errors import PyMongoError, DuplicateKeyError, OperationFailure
+from pymongo import MongoClient
+from pymongo.errors import PyMongoError, DuplicateKeyError
 from app.config import settings
-from app.models.dataset import Dataset, ImageMetadata, UploadSession
+from app.models.dataset import Dataset, ImageMetadata
+from app.utils.logger import get_logger
+
+logger = get_logger(__name__)
 
 
 class MongoService:
@@ -33,8 +36,9 @@ class MongoService:
         """Test database connection."""
         try:
             self.client.admin.command('ping')
-            print("Successfully connected to MongoDB")
+            logger.info("Successfully connected to MongoDB")
         except PyMongoError as e:
+            logger.error(f"Failed to connect to MongoDB: {e}")
             raise Exception(f"Failed to connect to MongoDB: {e}")
     
     def _convert_objectids_to_str(self, doc: Dict[str, Any]) -> None:
@@ -84,20 +88,28 @@ class MongoService:
                 # Generate new ObjectId if missing or invalid
                 dataset_dict["_id"] = ObjectId()
             
+            logger.info(f"Inserting dataset with _id: {dataset_dict['_id']} (type: {type(dataset_dict['_id'])})")
+            
             result = self.datasets.insert_one(dataset_dict)
             
             # Verify insertion was successful
             if not result.acknowledged:
+                logger.error("Dataset insertion was not acknowledged by MongoDB")
                 raise Exception("Dataset insertion was not acknowledged by MongoDB")
             
             if not result.inserted_id:
+                logger.error("No dataset ID returned from MongoDB")
                 raise Exception("No dataset ID returned from MongoDB")
+            
+            logger.info(f"Inserted dataset ID: {result.inserted_id} (type: {type(result.inserted_id)})")
             
             return str(result.inserted_id)
             
         except DuplicateKeyError:
+            logger.error(f"Dataset with name '{dataset.name}' already exists")
             raise ValueError(f"Dataset with name '{dataset.name}' already exists")
         except PyMongoError as e:
+            logger.error(f"Failed to create dataset: {e}", exc_info=True)
             raise Exception(f"Failed to create dataset: {e}")
     
     def get_dataset(self, dataset_id: str) -> Optional[Dict[str, Any]]:
@@ -113,7 +125,7 @@ class MongoService:
         try:
             # Validate ObjectId format
             if not ObjectId.is_valid(dataset_id):
-                print(f"Invalid ObjectId format: {dataset_id}")
+                logger.info(f"Invalid ObjectId format: {dataset_id}")
                 return None
             
             dataset = self.datasets.find_one({"_id": ObjectId(dataset_id)})
@@ -124,11 +136,12 @@ class MongoService:
                 for key, value in dataset.items():
                     if isinstance(value, ObjectId):
                         dataset[key] = str(value)
+                logger.info(f"Retrieved dataset: {dataset_id}")
             else:
-                print(f"No dataset found with ID: {dataset_id}")
+                logger.info(f"No dataset found with ID: {dataset_id}")
             return dataset
         except Exception as e:
-            print(f"Error in get_dataset: {e}")
+            logger.error(f"Error in get_dataset: {e}", exc_info=True)
             return None
     
     def list_datasets(self, skip: int = 0, limit: int = 100) -> List[Dict[str, Any]]:

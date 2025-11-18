@@ -104,7 +104,7 @@
 # @app.exception_handler(HTTPException)
 # async def http_exception_handler(request: Request, exc: HTTPException) -> JSONResponse:
 #     """HTTP异常处理器"""
-#     logger.warning(f"HTTP异常: {exc.status_code} - {exc.detail} - {request.url}")
+#     logger.error(f"HTTP异常: {exc.status_code} - {exc.detail} - {request.url}")
 #     return JSONResponse(
 #         status_code=exc.status_code,
 #         content={
@@ -118,7 +118,7 @@
 # @app.exception_handler(StarletteHTTPException)
 # async def starlette_http_exception_handler(request: Request, exc: StarletteHTTPException) -> JSONResponse:
 #     """Starlette HTTP异常处理器"""
-#     logger.warning(f"Starlette HTTP异常: {exc.status_code} - {exc.detail} - {request.url}")
+#     logger.error(f"Starlette HTTP异常: {exc.status_code} - {exc.detail} - {request.url}")
 #     return JSONResponse(
 #         status_code=exc.status_code,
 #         content={
@@ -132,7 +132,7 @@
 # @app.exception_handler(RequestValidationError)
 # async def validation_exception_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
 #     """请求验证异常处理器"""
-#     logger.warning(f"请求验证失败: {exc.errors()} - {request.url}")
+#     logger.error(f"请求验证失败: {exc.errors()} - {request.url}")
 #     return JSONResponse(
 #         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
 #         content={
@@ -676,11 +676,15 @@
 
 
 """Main FastAPI application."""
-from fastapi import FastAPI, Depends
+from fastapi import FastAPI, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from app.config import settings
 from app.api import datasets, upload, annotations
 from app.auth import authenticate_user
+from app.utils.logger import get_logger
+
+logger = get_logger(__name__)
 
 
 def create_application() -> FastAPI:
@@ -688,7 +692,7 @@ def create_application() -> FastAPI:
     application = FastAPI(
         title=settings.app_name,
         version=settings.app_version,
-        description="YOLO Dataset Management API",
+        description="YOLO Dataset API",
         docs_url="/docs",
         redoc_url="/redoc"
     )
@@ -701,6 +705,15 @@ def create_application() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+    
+    # Add global exception handler
+    @application.exception_handler(Exception)
+    async def global_exception_handler(request: Request, exc: Exception):
+        logger.error(f"Unhandled exception: {exc}", exc_info=True)
+        return JSONResponse(
+            status_code=500,
+            content={"detail": "Internal server error"}
+        )
     
     # Include routers
     application.include_router(
@@ -719,6 +732,8 @@ def create_application() -> FastAPI:
         tags=["annotations"]
     )
     
+    logger.info(f"Application '{settings.app_name}' v{settings.app_version} created successfully")
+    
     return application
 
 
@@ -728,6 +743,7 @@ app = create_application()
 @app.get("/")
 async def root():
     """Root endpoint."""
+    logger.info("Root endpoint accessed")
     return {
         "message": f"Welcome to {settings.app_name}",
         "version": settings.app_version
@@ -737,10 +753,5 @@ async def root():
 @app.get("/health")
 async def health_check():
     """Health check endpoint."""
+    logger.info("Health check endpoint accessed")
     return {"status": "healthy"}
-
-
-@app.get("/protected")
-async def protected_route(username: str = Depends(authenticate_user)):
-    """Protected route example."""
-    return {"message": f"Hello {username}, you have access to protected resources"}

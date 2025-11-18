@@ -6,6 +6,9 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from pymongo import MongoClient, ASCENDING, DESCENDING, TEXT
 from pymongo.errors import CollectionInvalid, OperationFailure
 from app.config import settings
+from app.utils.logger import get_logger
+
+logger = get_logger(__name__)
 
 
 def init_database():
@@ -25,7 +28,7 @@ def init_database():
     # Create initial admin user
     create_initial_admin(db)
     
-    print("Database initialization completed successfully!")
+    logger.info("Database initialization completed successfully!")
     client.close()
 
 
@@ -244,10 +247,10 @@ def create_initial_admin(db):
     # Insert if not exists
     if not db.users.find_one({'username': 'admin'}):
         db.users.insert_one(admin_user)
-        print("✅ Created initial admin user: admin/admin")
-        print("   Password hash: SHA-256 (development only)")
+        logger.info("✅ Created initial admin user: admin/admin")
+        logger.info("   Password hash: SHA-256 (development only)")
     else:
-        print("ℹ️  Admin user already exists")
+        logger.info("ℹ️  Admin user already exists")
 
 
 def init_annotations_collection(db):
