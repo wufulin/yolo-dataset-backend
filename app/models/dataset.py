@@ -1,73 +1,10 @@
 """Enhanced MongoDB data models with complete database design."""
 from datetime import datetime
-from typing import List, Optional, Dict, Any, Union, Literal
+from typing import List, Optional, Dict, Any
 from pydantic import BaseModel, Field, validator
 from bson import ObjectId
 from .base import PyObjectId
-
-
-# Annotation Sub-models
-class BBoxAnnotation(BaseModel):
-    """Bounding box annotation for detection tasks."""
-    annotation_type: Literal["bbox"] = "bbox"
-    class_id: int = Field(..., description="Class ID")
-    class_name: str = Field(..., description="Class name")
-    x_center: float = Field(..., ge=0, le=1, description="X center coordinate (normalized)")
-    y_center: float = Field(..., ge=0, le=1, description="Y center coordinate (normalized)")
-    width: float = Field(..., ge=0, le=1, description="Width (normalized)")
-    height: float = Field(..., ge=0, le=1, description="Height (normalized)")
-    confidence: Optional[float] = Field(None, ge=0, le=1, description="Detection confidence")
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-
-
-class OBBAnnotation(BaseModel):
-    """Oriented bounding box annotation."""
-    annotation_type: Literal["obb"] = "obb"
-    class_id: int = Field(..., description="Class ID")
-    class_name: str = Field(..., description="Class name")
-    points: List[float] = Field(..., min_items=8, max_items=8, description="4 points [x1,y1,x2,y2,x3,y3,x4,y4]")
-    confidence: Optional[float] = Field(None, ge=0, le=1, description="Detection confidence")
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-
-
-class SegmentationAnnotation(BaseModel):
-    """Segmentation annotation."""
-    annotation_type: Literal["segment"] = "segment"
-    class_id: int = Field(..., description="Class ID")
-    class_name: str = Field(..., description="Class name")
-    points: List[float] = Field(..., min_items=6, description="Polygon points (minimum 3 points)")
-    confidence: Optional[float] = Field(None, ge=0, le=1, description="Detection confidence")
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-
-
-class PoseAnnotation(BaseModel):
-    """Pose estimation annotation."""
-    annotation_type: Literal["pose"] = "pose"
-    class_id: int = Field(..., description="Class ID")
-    class_name: str = Field(..., description="Class name")
-    keypoints: List[float] = Field(..., description="Keypoints [x1,y1,v1,x2,y2,v2,...]")
-    skeleton: Optional[List[int]] = Field(None, description="Skeleton connections")
-    confidence: Optional[float] = Field(None, ge=0, le=1, description="Detection confidence")
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-
-
-class ClassificationAnnotation(BaseModel):
-    """Classification annotation."""
-    annotation_type: Literal["classify"] = "classify"
-    class_id: int = Field(..., description="Class ID")
-    class_name: str = Field(..., description="Class name")
-    confidence: Optional[float] = Field(None, ge=0, le=1, description="Classification confidence")
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-
-
-# Union type for all annotations
-AnnotationType = Union[
-    BBoxAnnotation, 
-    OBBAnnotation, 
-    SegmentationAnnotation, 
-    PoseAnnotation, 
-    ClassificationAnnotation
-]
+from .annotation import AnnotationType
 
 
 class ImageMetadata(BaseModel):
@@ -158,7 +95,7 @@ class Dataset(BaseModel):
         "json_schema_extra": {
             "example": {
                 "name": "COCO Dataset",
-                "description": "COCO 2017 dataset",
+                "description": "COCO8 dataset",
                 "dataset_type": "detect",
                 "class_names": ["person", "car", "bicycle"],
                 "num_images": 1000,
