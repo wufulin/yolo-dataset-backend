@@ -71,7 +71,10 @@ class MongoService:
         """
         dataset = self.datasets.find_one({"_id": ObjectId(dataset_id)})
         if dataset:
-            dataset["id"] = str(dataset["_id"])
+            dataset["_id"] = str(dataset["_id"])
+            for key, value in dataset.items():
+                if isinstance(value, ObjectId):
+                    dataset[key] = str(value)
         return dataset
     
     def list_datasets(self, skip: int = 0, limit: int = 100) -> List[Dict[str, Any]]:
@@ -88,7 +91,7 @@ class MongoService:
         cursor = self.datasets.find().skip(skip).limit(limit).sort("created_at", -1)
         datasets = []
         for dataset in cursor:
-            dataset["id"] = str(dataset["_id"])
+            dataset["_id"] = str(dataset["_id"])
             datasets.append(dataset)
         return datasets
     
@@ -153,8 +156,9 @@ class MongoService:
         cursor = self.images.find(query).skip(skip).limit(limit)
         images = []
         for image in cursor:
-            image["id"] = str(image["_id"])
+            image["_id"] = str(image["_id"])
             image["dataset_id"] = str(image["dataset_id"])
+            self._convert_objectids_to_str(image)
             images.append(image)
         return images
     
@@ -170,8 +174,9 @@ class MongoService:
         """
         image = self.images.find_one({"_id": ObjectId(image_id)})
         if image:
-            image["id"] = str(image["_id"])
+            image["_id"] = str(image["_id"])
             image["dataset_id"] = str(image["dataset_id"])
+            self._convert_objectids_to_str(image)
         return image
     
     def count_images(self, dataset_id: str, split: Optional[str] = None) -> int:

@@ -3,15 +3,11 @@ from app.models.base import PyObjectId, MongoBaseModel
 from app.models.dataset import (
     Dataset,
     ImageMetadata,
-    UploadSession,
-    BBoxAnnotation,
-    OBBAnnotation,
-    SegmentationAnnotation,
-    PoseAnnotation,
-    ClassificationAnnotation
+    UploadSession
 )
 from app.models.annotation import (
     Annotation,
+    AnnotationType,
     BaseAnnotation,
     BBox,
     OBBPoints,
@@ -20,10 +16,10 @@ from app.models.annotation import (
     AnnotationStats,
     AnnotationFilter,
     DetectionAnnotation,
-    OBBAnnotation as OBBAnnotationDetail,
-    SegmentationAnnotation as SegmentationAnnotationDetail,
-    PoseAnnotation as PoseAnnotationDetail,
-    ClassificationAnnotation as ClassificationAnnotationDetail
+    OBBAnnotation,
+    SegmentationAnnotation,
+    PoseAnnotation,
+    ClassificationAnnotation
 )
 
 __all__ = [
@@ -34,13 +30,9 @@ __all__ = [
     "Dataset",
     "ImageMetadata",
     "UploadSession",
-    "BBoxAnnotation",
-    "OBBAnnotation",
-    "SegmentationAnnotation",
-    "PoseAnnotation",
-    "ClassificationAnnotation",
     # Annotation models
     "Annotation",
+    "AnnotationType",
     "BaseAnnotation",
     "BBox",
     "OBBPoints",
@@ -49,9 +41,9 @@ __all__ = [
     "AnnotationStats",
     "AnnotationFilter",
     "DetectionAnnotation",
-    "OBBAnnotationDetail",
-    "SegmentationAnnotationDetail",
-    "PoseAnnotationDetail",
-    "ClassificationAnnotationDetail"
+    "OBBAnnotation",
+    "SegmentationAnnotation",
+    "PoseAnnotation",
+    "ClassificationAnnotation"
 ]
 

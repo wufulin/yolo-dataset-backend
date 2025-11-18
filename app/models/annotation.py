@@ -165,6 +165,9 @@ Annotation = Union[
     ClassificationAnnotation
 ]
 
+# Type alias for backward compatibility
+AnnotationType = Annotation
+
 
 class AnnotationStats(BaseModel):
     """Annotation statistics model."""

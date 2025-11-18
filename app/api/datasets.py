@@ -29,10 +29,11 @@ async def list_datasets(
         PaginatedResponse: Paginated list of datasets
     """
     skip = (page - 1) * page_size
+    
     datasets = mongo_service.list_datasets(skip=skip, limit=page_size)
     
-    total = len(mongo_service.list_datasets(skip=0, limit=1000))  # Simplified count
-    
+    total = mongo_service.datasets.count_documents({})
+
     return PaginatedResponse(
         items=datasets,
         total=total,

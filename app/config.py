@@ -22,12 +22,12 @@ class Settings(BaseSettings):
     port: int = 8000
     
     # MongoDB
-    mongodb_url: str = "mongodb://localhost:27017"
+    mongodb_url: str = "mongodb://admin:admin123456@121.43.108.161:27017/yolo_datasets?authSource=admin"
     mongo_db_name: str = "yolo_datasets"
     mongodb_max_pool_size: int = 10  # 简化连接池
     
     # MinIO
-    minio_endpoint: str = "localhost:9000"
+    minio_endpoint: str = "121.43.108.161:9000"
     minio_access_key: str = "minioadmin"
     minio_secret_key: str = "minioadmin"
     minio_bucket_name: str = "yolo-datasets"
