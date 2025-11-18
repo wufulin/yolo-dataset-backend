@@ -1,7 +1,9 @@
 """Annotation service for handling annotation operations."""
-from typing import List, Optional, Dict, Any, Tuple
 from datetime import datetime
+from typing import Any, Dict, List, Optional, Tuple
+
 from bson import ObjectId
+
 from app.models.annotation import BaseAnnotation
 from app.services.mongo_service import mongo_service
 from app.utils.logger import get_logger

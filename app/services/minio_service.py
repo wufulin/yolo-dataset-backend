@@ -1,6 +1,7 @@
 """MinIO service for handling file storage operations."""
 from minio import Minio
 from minio.error import S3Error
+
 from app.config import settings
 from app.utils.logger import get_logger
 

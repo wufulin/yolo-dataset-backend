@@ -1,15 +1,17 @@
 """File upload API endpoints."""
 import os
 import uuid
-from typing import Optional, List
-from fastapi import APIRouter, UploadFile, File, Form, HTTPException, status, Depends
+from typing import List, Optional
+
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+
 from app.auth import authenticate_user
 from app.config import settings
-from app.utils.file_utils import ensure_directory, safe_remove
-from app.schemas.dataset import UploadResponse, UploadComplete
-from app.services.yolo_validator import yolo_validator
-from app.services.mongo_service import mongo_service
+from app.schemas.dataset import UploadComplete, UploadResponse
 from app.services.minio_service import minio_service
+from app.services.mongo_service import mongo_service
+from app.services.yolo_validator import yolo_validator
+from app.utils.file_utils import ensure_directory, safe_remove
 from app.utils.logger import get_logger
 
 logger = get_logger(__name__)

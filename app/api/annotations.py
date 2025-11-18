@@ -1,16 +1,13 @@
 """Annotation management API endpoints."""
 from typing import Optional
-from fastapi import APIRouter, HTTPException, status, Query, Depends
+
 from bson import ObjectId
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from app.auth import authenticate_user
-from app.schemas.annotation import (
-    AnnotationResponse,
-    AnnotationUpdate,
-    PaginatedAnnotationsResponse
-)
-from app.services.mongo_service import mongo_service
+from app.schemas.annotation import AnnotationResponse, AnnotationUpdate, PaginatedAnnotationsResponse
 from app.services.annotation_service import annotation_service
+from app.services.mongo_service import mongo_service
 from app.utils.logger import get_logger
 
 logger = get_logger(__name__)

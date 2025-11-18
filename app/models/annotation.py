@@ -1,8 +1,10 @@
 """Annotation models for YOLO dataset types."""
 from datetime import datetime
-from typing import List, Optional, Dict, Any, Union, Literal
-from pydantic import BaseModel, Field, validator
+from typing import Any, Dict, List, Literal, Optional, Union
+
 from bson import ObjectId
+from pydantic import BaseModel, Field, validator
+
 from .base import PyObjectId
 
 

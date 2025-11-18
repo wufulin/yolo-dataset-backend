@@ -1,24 +1,24 @@
 """Pydantic schemas for API requests and responses."""
+from app.schemas.annotation import (
+    AnnotationBase,
+    AnnotationResponse,
+    AnnotationStatsResponse,
+    AnnotationUpdate,
+    BBoxSchema,
+    ClassificationAnnotationCreate,
+    DetectionAnnotationCreate,
+    OBBAnnotationCreate,
+    PaginatedAnnotationsResponse,
+    PoseAnnotationCreate,
+    SegmentationAnnotationCreate,
+)
 from app.schemas.dataset import (
     DatasetCreate,
     DatasetResponse,
     ImageResponse,
-    UploadResponse,
+    PaginatedResponse,
     UploadComplete,
-    PaginatedResponse
-)
-from app.schemas.annotation import (
-    AnnotationBase,
-    BBoxSchema,
-    DetectionAnnotationCreate,
-    OBBAnnotationCreate,
-    SegmentationAnnotationCreate,
-    PoseAnnotationCreate,
-    ClassificationAnnotationCreate,
-    AnnotationResponse,
-    AnnotationUpdate,
-    AnnotationStatsResponse,
-    PaginatedAnnotationsResponse
+    UploadResponse,
 )
 
 __all__ = [

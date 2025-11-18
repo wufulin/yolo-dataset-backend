@@ -1,8 +1,10 @@
 """MongoDB service for handling dataset and annotation operations."""
-from typing import Dict, List, Optional, Any
+from typing import Any, Dict, List, Optional
+
 from bson import ObjectId
 from pymongo import MongoClient
-from pymongo.errors import PyMongoError, DuplicateKeyError
+from pymongo.errors import DuplicateKeyError, PyMongoError
+
 from app.config import settings
 from app.models.dataset import Dataset, ImageMetadata
 from app.utils.logger import get_logger

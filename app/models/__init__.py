@@ -1,26 +1,22 @@
 """Data models for MongoDB collections."""
-from app.models.base import PyObjectId, MongoBaseModel
-from app.models.dataset import (
-    Dataset,
-    ImageMetadata,
-    UploadSession
-)
 from app.models.annotation import (
     Annotation,
+    AnnotationFilter,
+    AnnotationStats,
     AnnotationType,
     BaseAnnotation,
     BBox,
-    OBBPoints,
-    SegmentationPolygon,
-    PoseKeypoints,
-    AnnotationStats,
-    AnnotationFilter,
+    ClassificationAnnotation,
     DetectionAnnotation,
     OBBAnnotation,
-    SegmentationAnnotation,
+    OBBPoints,
     PoseAnnotation,
-    ClassificationAnnotation
+    PoseKeypoints,
+    SegmentationAnnotation,
+    SegmentationPolygon,
 )
+from app.models.base import MongoBaseModel, PyObjectId
+from app.models.dataset import Dataset, ImageMetadata, UploadSession
 
 __all__ = [
     # Base

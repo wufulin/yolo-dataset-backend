@@ -1,8 +1,9 @@
 """Authentication module for the YOLO dataset manager."""
+import secrets
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
-import secrets
+
 from app.utils.logger import get_logger
 
 logger = get_logger(__name__)

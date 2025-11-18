@@ -1,10 +1,13 @@
 """Database initialization script."""
-import sys
 import os
+import sys
+
+from pymongo import ASCENDING, DESCENDING, TEXT, MongoClient
+from pymongo.errors import CollectionInvalid, OperationFailure
+
+# Add project root directory to Python path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from pymongo import MongoClient, ASCENDING, DESCENDING, TEXT
-from pymongo.errors import CollectionInvalid, OperationFailure
 from app.config import settings
 from app.utils.logger import get_logger
 

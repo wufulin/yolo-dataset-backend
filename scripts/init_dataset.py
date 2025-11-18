@@ -5,23 +5,22 @@ Reads YOLO format datasets and inserts them into MongoDB
 Usage:
     python scripts/init_dataset.py
 """
-
-import sys
-import os
-import yaml
 import hashlib
-from pathlib import Path
+import os
+import sys
 from datetime import datetime
-from typing import List, Dict, Any, Tuple
+from pathlib import Path
+from typing import Any, Dict, List, Tuple
+
+import yaml
+from bson import ObjectId
+from minio import Minio
+from minio.error import S3Error
+from PIL import Image
+from pymongo import MongoClient
 
 # Add project root directory to Python path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-from pymongo import MongoClient
-from bson import ObjectId
-from PIL import Image
-from minio import Minio
-from minio.error import S3Error
 
 from app.config import settings
 from app.utils.logger import get_logger

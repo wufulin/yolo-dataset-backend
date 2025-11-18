@@ -1,10 +1,12 @@
 """Enhanced MongoDB data models with complete database design."""
 from datetime import datetime
-from typing import List, Optional, Dict, Any
-from pydantic import BaseModel, Field, validator
+from typing import Any, Dict, List, Optional
+
 from bson import ObjectId
-from .base import PyObjectId
+from pydantic import BaseModel, Field, validator
+
 from .annotation import AnnotationType
+from .base import PyObjectId
 
 
 class ImageMetadata(BaseModel):

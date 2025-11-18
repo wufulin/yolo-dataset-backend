@@ -676,12 +676,13 @@
 
 
 """Main FastAPI application."""
-from fastapi import FastAPI, Depends, Request
+from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from app.config import settings
-from app.api import datasets, upload, annotations
+
+from app.api import annotations, datasets, upload
 from app.auth import authenticate_user
+from app.config import settings
 from app.utils.logger import get_logger
 
 logger = get_logger(__name__)

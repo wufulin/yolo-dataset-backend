@@ -1,7 +1,8 @@
 """Base models and utilities for MongoDB integration."""
 from typing import Any
+
 from bson import ObjectId
-from pydantic import BaseModel, Field, GetJsonSchemaHandler, ConfigDict
+from pydantic import BaseModel, ConfigDict, GetJsonSchemaHandler
 from pydantic.json_schema import JsonSchemaValue
 from pydantic_core import core_schema
 
