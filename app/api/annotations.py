@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from app.auth import authenticate_user
 from app.schemas.annotation import AnnotationResponse, AnnotationUpdate, PaginatedAnnotationsResponse
 from app.services.annotation_service import annotation_service
-from app.services.mongo_service import mongo_service
+from app.services.dataset_service import dataset_service
 from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -141,7 +141,7 @@ async def get_dataset_annotation_stats(
     
     try:
         # Verify dataset exists
-        dataset = mongo_service.get_dataset(dataset_id)
+        dataset = dataset_service.get_dataset(dataset_id)
         if not dataset:
             logger.error(f"Dataset not found with ID: {dataset_id}")
             raise HTTPException(
@@ -180,7 +180,7 @@ async def get_image_annotations(
     
     try:
         # Verify image exists
-        image = mongo_service.get_image(image_id)
+        image = dataset_service.get_image(image_id)
         if not image:
             logger.error(f"Image not found with ID: {image_id}")
             raise HTTPException(
@@ -328,7 +328,7 @@ async def get_class_distribution(
     
     try:
         # Verify dataset exists
-        dataset = mongo_service.get_dataset(dataset_id)
+        dataset = dataset_service.get_dataset(dataset_id)
         if not dataset:
             logger.error(f"Dataset not found with ID: {dataset_id}")
             raise HTTPException(

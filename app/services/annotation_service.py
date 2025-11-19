@@ -5,7 +5,8 @@ from typing import Any, Dict, List, Optional, Tuple
 from bson import ObjectId
 
 from app.models.annotation import BaseAnnotation
-from app.services.mongo_service import mongo_service
+from app.services.dataset_service import dataset_service
+from app.services.db_service import db_service
 from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -16,11 +17,9 @@ class AnnotationService:
     
     def __init__(self):
         """Initialize annotation service."""
-        logger.info("Initializing annotation service")
-        self.db = mongo_service.db
+        self.db = db_service.db
         self.annotations = self.db.annotations
         self.annotation_stats = self.db.annotation_stats
-        logger.info("Annotation service initialized successfully")
     
     def create_annotation(self, annotation_data: dict) -> str:
         """
@@ -286,7 +285,7 @@ class AnnotationService:
             
             # Get total counts
             total_annotations = sum(class_distribution.values())
-            total_images = mongo_service.count_images(dataset_id, split)
+            total_images = dataset_service.count_images(dataset_id, split)
             
         else:
             # Simple aggregation without split filter
@@ -303,7 +302,7 @@ class AnnotationService:
             
             # Get total counts
             total_annotations = sum(class_distribution.values())
-            total_images = mongo_service.count_images(dataset_id)
+            total_images = dataset_service.count_images(dataset_id)
         
         logger.info(f"Class distribution for dataset {dataset_id}: {len(class_distribution)} classes, {total_annotations} annotations")
         return {
@@ -323,7 +322,7 @@ class AnnotationService:
         """
         count = self.annotations.count_documents({"image_id": image_id})
         logger.info(f"Updating image {image_id} annotation count to {count}")
-        mongo_service.db.images.update_one(
+        db_service.db.images.update_one(
             {"_id": image_id},
             {"$set": {
                 "annotation_count": count,
@@ -341,7 +340,7 @@ class AnnotationService:
         """
         count = self.annotations.count_documents({"dataset_id": dataset_id})
         logger.info(f"Updating dataset {dataset_id} annotation count to {count}")
-        mongo_service.db.datasets.update_one(
+        db_service.db.datasets.update_one(
             {"_id": dataset_id},
             {"$set": {
                 "num_annotations": count,

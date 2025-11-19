@@ -15,9 +15,7 @@ class YOLOValidator:
     
     def __init__(self):
         """Initialize validator."""
-        logger.info("Initializing YOLO validator")
         self.supported_types = ['detect', 'obb', 'segment', 'pose', 'classify']
-        logger.info(f"YOLO validator initialized with supported types: {self.supported_types}")
     
     def validate_dataset(self, dataset_path: str) -> Tuple[bool, str]:
         """

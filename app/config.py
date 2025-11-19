@@ -69,27 +69,6 @@ class Settings(BaseSettings):
 settings = Settings()
 
 
-# 数据库连接配置
-DATABASE_CONFIG = {
-    "host": settings.mongodb_url,
-    "maxPoolSize": settings.mongodb_max_pool_size,
-    "serverSelectionTimeoutMS": 5000,
-    "connectTimeoutMS": 10000,
-    "socketTimeoutMS": 45000,
-    "retryWrites": True,
-    "w": "majority",
-    "readPreference": "primaryPreferred"
-}
-
-# MinIO连接配置
-MINIO_CONFIG = {
-    "endpoint": settings.minio_endpoint,
-    "access_key": settings.minio_access_key,
-    "secret_key": settings.minio_secret_key,
-    "secure": settings.minio_secure,
-    "region": "us-east-1"
-}
-
 # 支持的图像格式
 ALLOWED_IMAGE_FORMATS = set(fmt.lower() for fmt in settings.allowed_image_formats)
 

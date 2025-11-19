@@ -1,69 +1,24 @@
-"""MongoDB service for handling dataset and annotation operations."""
+"""Service for handling dataset operations."""
 from typing import Any, Dict, List, Optional
 
 from bson import ObjectId
-from pymongo import MongoClient
 from pymongo.errors import DuplicateKeyError, PyMongoError
 
-from app.config import settings
 from app.models.dataset import Dataset, ImageMetadata
+from app.services.db_service import db_service
 from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
 
-class MongoService:
-    """Service class for MongoDB operations."""
+class DatasetService:
+    """Service class for Dataset operations."""
     
-    def __init__(self, max_pool_size: int = 50, retry_writes: bool = True):
-        """Initialize MongoDB client with connection pooling."""
-        self.client = MongoClient(
-            settings.mongodb_url,
-            maxPoolSize=max_pool_size,
-            retryWrites=retry_writes,
-            serverSelectionTimeoutMS=5000,
-            connectTimeoutMS=5000
-        )
-        self.db = self.client[settings.mongo_db_name]
+    def __init__(self):
+        """Initialize Dataset service."""
+        self.db = db_service
         self.datasets = self.db.datasets
         self.images = self.db.images
-        self.upload_sessions = self.db.upload_sessions
-        self.dataset_statistics = self.db.dataset_statistics
-        self.users = self.db.users
-        
-        # Test connection
-        self._test_connection()
-    
-    def _test_connection(self):
-        """Test database connection."""
-        try:
-            self.client.admin.command('ping')
-            logger.info("Successfully connected to MongoDB")
-        except PyMongoError as e:
-            logger.error(f"Failed to connect to MongoDB: {e}")
-            raise Exception(f"Failed to connect to MongoDB: {e}")
-    
-    def _convert_objectids_to_str(self, doc: Dict[str, Any]) -> None:
-        """
-        Recursively convert ObjectId fields to strings in a document.
-        
-        Args:
-            doc: Document dictionary to process (modified in place)
-        """
-        if not isinstance(doc, dict):
-            return
-        
-        for key, value in list(doc.items()):
-            if isinstance(value, ObjectId):
-                doc[key] = str(value)
-            elif isinstance(value, dict):
-                self._convert_objectids_to_str(value)
-            elif isinstance(value, list):
-                for i, item in enumerate(value):
-                    if isinstance(item, ObjectId):
-                        value[i] = str(item)
-                    elif isinstance(item, dict):
-                        self._convert_objectids_to_str(item)
     
     def create_dataset(self, dataset: Dataset) -> str:
         """
@@ -82,8 +37,10 @@ class MongoService:
         try:
             dataset_dict = dataset.model_dump(by_alias=True, mode='python')
             
-            logger.info(f"Inserting dataset with _id: {dataset_dict['_id']} (type: {type(dataset_dict['_id'])})")
-                       
+            # Ensure _id is ObjectId
+            if "_id" in dataset_dict and isinstance(dataset_dict["_id"], str):
+                dataset_dict["_id"] = ObjectId(dataset_dict["_id"])
+                                
             result = self.datasets.insert_one(dataset_dict)
             
             # Verify insertion was successful
@@ -95,7 +52,7 @@ class MongoService:
                 logger.error("No dataset ID returned from MongoDB")
                 raise Exception("No dataset ID returned from MongoDB")
             
-            logger.info(f"Inserted dataset ID: {result.inserted_id} (type: {type(result.inserted_id)})")
+            logger.info(f"Inserted dataset ID: {result.inserted_id}")
             
             return str(result.inserted_id)
             
@@ -106,7 +63,7 @@ class MongoService:
             logger.error(f"Failed to create dataset: {e}", exc_info=True)
             raise Exception(f"Failed to create dataset: {e}")
     
-    def get_dataset(self, dataset_id: str) -> Optional[Dataset]:
+    def get_dataset(self, dataset_id: str) -> Optional[Dict[str, Any]]:
         """
         Get dataset by ID.
         
@@ -202,6 +159,7 @@ class MongoService:
         
         # Ensure dataset_id is ObjectId (model_dump serializes PyObjectId to string)
         if "dataset_id" in image_dict:
+            from app.models.base import PyObjectId
             if isinstance(image_dict["dataset_id"], str):
                 image_dict["dataset_id"] = ObjectId(image_dict["dataset_id"])
             elif isinstance(image_dict["dataset_id"], PyObjectId):
@@ -234,7 +192,7 @@ class MongoService:
             image["id"] = str(image["_id"])
             del image["_id"]  # Remove _id and use id instead
             image["dataset_id"] = str(image["dataset_id"])
-            self._convert_objectids_to_str(image)
+            self.db.convert_objectids_to_str(image)
             images.append(image)
         return images
     
@@ -253,7 +211,7 @@ class MongoService:
             image["id"] = str(image["_id"])
             del image["_id"]  # Remove _id and use id instead
             image["dataset_id"] = str(image["dataset_id"])
-            self._convert_objectids_to_str(image)
+            self.db.convert_objectids_to_str(image)
         return image
     
     def count_images(self, dataset_id: str, split: Optional[str] = None) -> int:
@@ -290,5 +248,6 @@ class MongoService:
         return result.deleted_count > 0
 
 
-# Global MongoDB service instance
-mongo_service = MongoService()
+# Global Dataset service instance
+dataset_service = DatasetService()
+

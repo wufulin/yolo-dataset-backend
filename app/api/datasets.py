@@ -7,8 +7,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from app.auth import authenticate_user
 from app.models.dataset import Dataset
 from app.schemas.dataset import DatasetCreate, DatasetResponse, ImageResponse, PaginatedResponse
+from app.services.dataset_service import dataset_service
 from app.services.minio_service import minio_service
-from app.services.mongo_service import mongo_service
 from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -63,10 +63,10 @@ async def create_dataset(
     
     try:
         # Create dataset in MongoDB
-        dataset_id = mongo_service.create_dataset(dataset)
+        dataset_id = dataset_service.create_dataset(dataset)
         
         # Retrieve and return created dataset
-        created_dataset = mongo_service.get_dataset(dataset_id)
+        created_dataset = dataset_service.get_dataset(dataset_id)
         if not created_dataset:
             logger.error(f"Failed to retrieve created dataset with ID: {dataset_id}")
             raise HTTPException(
@@ -108,8 +108,8 @@ async def list_datasets(
     skip = (page - 1) * page_size
     
     try:
-        datasets = mongo_service.list_datasets(skip=skip, limit=page_size)
-        total = mongo_service.datasets.count_documents({})
+        datasets = dataset_service.list_datasets(skip=skip, limit=page_size)
+        total = dataset_service.datasets.count_documents({})
         
         logger.info(f"Retrieved {len(datasets)} datasets (total: {total})")
         return PaginatedResponse(
@@ -144,7 +144,7 @@ async def get_dataset(
     logger.info(f"Retrieving dataset with ID: {dataset_id}")
     
     try:
-        dataset = mongo_service.get_dataset(dataset_id)
+        dataset = dataset_service.get_dataset(dataset_id)
         if not dataset:
             logger.error(f"Dataset not found with ID: {dataset_id}")
             raise HTTPException(
@@ -188,7 +188,7 @@ async def get_dataset_images(
     
     try:
         # Verify dataset exists
-        dataset = mongo_service.get_dataset(dataset_id)
+        dataset = dataset_service.get_dataset(dataset_id)
         if not dataset:
             logger.error(f"Dataset not found with ID: {dataset_id}")
             raise HTTPException(
@@ -197,7 +197,7 @@ async def get_dataset_images(
             )
         
         skip = (page - 1) * page_size
-        images = mongo_service.get_images_by_dataset(
+        images = dataset_service.get_images_by_dataset(
             dataset_id, skip=skip, limit=page_size, split=split
         )
         
@@ -205,7 +205,7 @@ async def get_dataset_images(
         for image in images:
             image["file_url"] = minio_service.get_file_url(image["file_path"])
         
-        total = mongo_service.count_images(dataset_id, split=split)
+        total = dataset_service.count_images(dataset_id, split=split)
         
         logger.info(f"Retrieved {len(images)} images for dataset {dataset_id} (total: {total})")
         return PaginatedResponse(
@@ -242,7 +242,7 @@ async def get_image(
     logger.info(f"Retrieving image with ID: {image_id}")
     
     try:
-        image = mongo_service.get_image(image_id)
+        image = dataset_service.get_image(image_id)
         if not image:
             logger.error(f"Image not found with ID: {image_id}")
             raise HTTPException(
@@ -283,7 +283,7 @@ async def delete_dataset(
     
     try:
         # Verify dataset exists
-        dataset = mongo_service.get_dataset(dataset_id)
+        dataset = dataset_service.get_dataset(dataset_id)
         if not dataset:
             logger.error(f"Dataset not found with ID: {dataset_id}")
             raise HTTPException(
@@ -292,7 +292,7 @@ async def delete_dataset(
             )
         
         # Delete from MongoDB and MinIO
-        success = mongo_service.delete_dataset(dataset_id)
+        success = dataset_service.delete_dataset(dataset_id)
         
         if success:
             logger.info(f"Dataset {dataset_id} deleted successfully")

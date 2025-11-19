@@ -8,8 +8,8 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, s
 from app.auth import authenticate_user
 from app.config import settings
 from app.schemas.dataset import UploadComplete, UploadResponse
+from app.services.dataset_service import dataset_service
 from app.services.minio_service import minio_service
-from app.services.mongo_service import mongo_service
 from app.services.yolo_validator import yolo_validator
 from app.utils.file_utils import ensure_directory, safe_remove
 from app.utils.logger import get_logger
@@ -224,7 +224,7 @@ async def process_dataset(zip_path: str, dataset_info: Optional[any]) -> dict:
             "splits": {}
         }
         
-        dataset_id = mongo_service.create_dataset(dataset_data)
+        dataset_id = dataset_service.create_dataset(dataset_data)
         
         # Process images and annotations
         processed_count = await process_images(
@@ -323,7 +323,7 @@ async def process_single_image(image_path: str, dataset_id: str, split: str,
         "annotations": annotations
     }
     
-    mongo_service.create_image(image_data)
+    dataset_service.create_image(image_data)
 
 
 def find_image_files(directory: str) -> List[str]:
