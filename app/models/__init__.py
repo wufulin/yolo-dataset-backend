@@ -16,7 +16,9 @@ from app.models.annotation import (
     SegmentationPolygon,
 )
 from app.models.base import MongoBaseModel, PyObjectId
-from app.models.dataset import Dataset, ImageMetadata, UploadSession
+from app.models.dataset import Dataset
+from app.models.image import ImageMetadata
+from app.models.upload_session import UploadSession
 
 __all__ = [
     # Base
@@ -24,7 +26,9 @@ __all__ = [
     "MongoBaseModel",
     # Dataset models
     "Dataset",
+    # Image models
     "ImageMetadata",
+    # Upload models
     "UploadSession",
     # Annotation models
     "Annotation",

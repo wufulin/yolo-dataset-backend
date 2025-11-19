@@ -1,11 +1,9 @@
-"""Pydantic schemas for API requests and responses."""
+"""Pydantic schemas for dataset-related API requests and responses."""
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
-from bson import ObjectId
 
-from app.models.base import PyObjectId
 
 class DatasetCreate(BaseModel):
     """Schema for dataset creation."""
@@ -27,7 +25,7 @@ class DatasetCreate(BaseModel):
 
 class DatasetResponse(BaseModel):
     """Schema for dataset response."""
-    id: PyObjectId = Field(..., alias="_id", description="Dataset ID")
+    id: str = Field(..., alias="_id", description="Dataset ID")
     name: str = Field(..., description="Dataset name")
     description: Optional[str] = Field(None, description="Dataset description")
     dataset_type: str = Field(..., description="Dataset type")
@@ -40,35 +38,8 @@ class DatasetResponse(BaseModel):
     
     model_config = {
         "from_attributes": True,
-        "json_encoders": {ObjectId: str}
+        "populate_by_name": True
     }
-
-
-class ImageResponse(BaseModel):
-    """Schema for image response."""
-    id: str = Field(..., description="Image ID")
-    dataset_id: str = Field(..., description="Parent dataset ID")
-    filename: str = Field(..., description="Image filename")
-    file_url: str = Field(..., description="Image URL")
-    width: int = Field(..., description="Image width")
-    height: int = Field(..., description="Image height")
-    split: str = Field(..., description="Dataset split")
-    annotations: List[Dict[str, Any]] = Field(..., description="Image annotations")
-    created_at: datetime = Field(..., description="Creation timestamp")
-
-
-class UploadResponse(BaseModel):
-    """Schema for upload response."""
-    upload_id: str = Field(..., description="Upload session ID")
-    chunk_size: int = Field(..., description="Chunk size in bytes")
-    total_chunks: int = Field(..., description="Total number of chunks")
-
-
-class UploadComplete(BaseModel):
-    """Schema for upload completion."""
-    upload_id: str = Field(..., description="Upload session ID")
-    filename: str = Field(..., description="Original filename")
-    dataset_info: Optional[DatasetCreate] = Field(None, description="Dataset information")
 
 
 class PaginatedResponse(BaseModel):

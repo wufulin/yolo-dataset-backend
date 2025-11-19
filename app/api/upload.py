@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, s
 
 from app.auth import authenticate_user
 from app.config import settings
-from app.schemas.dataset import UploadComplete, UploadResponse
+from app.schemas.upload import UploadComplete, UploadResponse
 from app.services.dataset_service import dataset_service
 from app.services.minio_service import minio_service
 from app.services.yolo_validator import yolo_validator
@@ -19,7 +19,8 @@ logger = get_logger(__name__)
 
 router = APIRouter()
 
-# Store upload sessions in memory (in production, use Redis)
+# Store upload sessions in memory 
+# TODO: Use Redis for production
 upload_sessions = {}
 
 

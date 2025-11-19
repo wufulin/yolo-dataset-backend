@@ -25,6 +25,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app.config import settings
 from app.utils.logger import get_logger
+from app.services.minio_service import minio_service
 
 logger = get_logger(__name__)
 
@@ -265,7 +266,7 @@ class YOLODatasetImporter:
     
     def process_split(self, split_name: str) -> Tuple[int, int, int]:
         """
-        Process a single dataset split
+        Process a single dataset split with batch upload for better performance
         
         Args:
             split_name: Split name (train/val)
@@ -286,8 +287,10 @@ class YOLODatasetImporter:
         logger.info(f"\nProcessing {split_name} split:")
         logger.info(f"  Number of images: {len(image_files)}")
         
-        image_count = 0
-        annotation_count = 0
+        # Phase 1: Prepare all image data and upload list
+        logger.info(f"  Phase 1: Preparing image data...")
+        upload_list = []
+        image_data_list = []
         total_file_size = 0
         
         for image_path in image_files:
@@ -312,21 +315,25 @@ class YOLODatasetImporter:
                     ann["image_id"] = image_id
                     ann["dataset_id"] = self.dataset_id
                 
-                # MinIO path format: datasets/{dataset_id}/images/{split}/{filename}
-                minio_file_path = f"datasets/{str(self.dataset_id)}/images/{split_name}/{image_path.name}"
+                # MinIO path format: {user_id}/{dataset_id}/images/{split}/{filename}
+                minio_file_path = f"691c3f00ca496bc2f41f0993/{str(self.dataset_id)}/images/{split_name}/{image_path.name}"
                 
-                # Upload image to MinIO
-                upload_success = self.upload_to_minio(image_path, minio_file_path)
-                if not upload_success:
-                    logger.error(f"  ✗ Skipped {image_path.name}: MinIO upload failed")
-                    continue
+                # Determine content type
+                content_type = "image/jpeg"
+                if image_path.suffix.lower() in ['.png']:
+                    content_type = "image/png"
+                elif image_path.suffix.lower() in ['.jpg', '.jpeg']:
+                    content_type = "image/jpeg"
                 
-                # Create image document
-                image_doc = {
+                # Add to upload list: (local_path, minio_path, content_type)
+                upload_list.append((str(image_path), minio_file_path, content_type))
+                
+                # Store image data for later database insertion
+                image_data_list.append({
                     "_id": image_id,
                     "dataset_id": self.dataset_id,
                     "filename": image_path.name,
-                    "file_path": minio_file_path,  # MinIO storage path
+                    "file_path": minio_file_path,
                     "file_size": file_size,
                     "file_hash": file_hash,
                     "width": width,
@@ -343,19 +350,58 @@ class YOLODatasetImporter:
                     "annotation_count": len(annotations),
                     "created_at": datetime.utcnow(),
                     "updated_at": datetime.utcnow()
-                }
+                })
                 
-                # Insert into database
-                self.images_collection.insert_one(image_doc)
-                
-                image_count += 1
-                annotation_count += len(annotations)
-                
-                logger.info(f"  ✓ {image_path.name}: {width}x{height}, {len(annotations)} annotations, {file_size/1024:.1f}KB [Uploaded to MinIO]")
+                logger.info(f"  ✓ Prepared {image_path.name}: {width}x{height}, {len(annotations)} annotations, {file_size/1024:.1f}KB")
                 
             except Exception as e:
-                logger.error(f"  ✗ Processing failed {image_path.name}: {e}", exc_info=True)
+                logger.error(f"  ✗ Failed to prepare {image_path.name}: {e}", exc_info=True)
                 continue
+        
+        # Phase 2: Batch upload to MinIO
+        logger.info(f"\n  Phase 2: Batch uploading {len(upload_list)} images to MinIO...")
+        upload_result = minio_service.upload_files(
+            upload_list,
+            max_workers=15,  # Use more workers for better performance
+            max_retries=3,
+            retry_delay=1.0
+        )
+        
+        logger.info(f"  Upload completed: {upload_result['successful']}/{upload_result['total']} successful")
+        if upload_result['retry_info']['total_retries'] > 0:
+            logger.info(f"  Retries performed: {upload_result['retry_info']['total_retries']}")
+        
+        # Phase 3: Insert successfully uploaded images to database
+        logger.info(f"\n  Phase 3: Inserting image records to database...")
+        successful_paths = set(upload_result['success_list'])
+        
+        image_count = 0
+        annotation_count = 0
+        images_to_insert = []
+        
+        for image_data in image_data_list:
+            if image_data["file_path"] in successful_paths:
+                images_to_insert.append(image_data)
+                annotation_count += len(image_data["annotations"])
+        
+        # Batch insert to database
+        if images_to_insert:
+            self.images_collection.insert_many(images_to_insert)
+            image_count = len(images_to_insert)
+            logger.info(f"  ✓ Inserted {image_count} image records to database")
+        
+        # Log failed uploads
+        if upload_result['failed_list']:
+            logger.warning(f"\n  ⚠ {len(upload_result['failed_list'])} images failed to upload:")
+            for failed in upload_result['failed_list'][:10]:  # Show first 10 failures
+                logger.warning(f"    - {failed['object_name']}: {failed['error']}")
+            if len(upload_result['failed_list']) > 10:
+                logger.warning(f"    ... and {len(upload_result['failed_list']) - 10} more")
+        
+        logger.info(f"\n  Split summary:")
+        logger.info(f"    Images processed: {image_count}")
+        logger.info(f"    Annotations: {annotation_count}")
+        logger.info(f"    Total size: {total_file_size / 1024 / 1024:.2f} MB")
         
         return image_count, annotation_count, total_file_size
     

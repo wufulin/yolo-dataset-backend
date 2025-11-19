@@ -2,12 +2,15 @@
 from datetime import datetime
 from typing import Optional
 
+
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from app.auth import authenticate_user
 from app.models.dataset import Dataset
-from app.schemas.dataset import DatasetCreate, DatasetResponse, ImageResponse, PaginatedResponse
+from app.schemas.dataset import DatasetCreate, DatasetResponse, PaginatedResponse
+from app.schemas.image import ImageResponse
 from app.services.dataset_service import dataset_service
+from app.services.image_service import image_service
 from app.services.minio_service import minio_service
 from app.utils.logger import get_logger
 
@@ -197,7 +200,7 @@ async def get_dataset_images(
             )
         
         skip = (page - 1) * page_size
-        images = dataset_service.get_images_by_dataset(
+        images = image_service.get_images_by_dataset(
             dataset_id, skip=skip, limit=page_size, split=split
         )
         
@@ -205,7 +208,7 @@ async def get_dataset_images(
         for image in images:
             image["file_url"] = minio_service.get_file_url(image["file_path"])
         
-        total = dataset_service.count_images(dataset_id, split=split)
+        total = image_service.count_images(dataset_id, split=split)
         
         logger.info(f"Retrieved {len(images)} images for dataset {dataset_id} (total: {total})")
         return PaginatedResponse(
@@ -242,7 +245,7 @@ async def get_image(
     logger.info(f"Retrieving image with ID: {image_id}")
     
     try:
-        image = dataset_service.get_image(image_id)
+        image = image_service.get_image(image_id)
         if not image:
             logger.error(f"Image not found with ID: {image_id}")
             raise HTTPException(
@@ -262,52 +265,4 @@ async def get_image(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to retrieve image: {str(e)}"
-        )
-
-
-@router.delete("/datasets/{dataset_id}")
-async def delete_dataset(
-    dataset_id: str,
-    username: str = Depends(authenticate_user)
-):
-    """
-    Delete dataset and all associated images.
-    
-    Args:
-        dataset_id: Dataset ID
-        
-    Returns:
-        dict: Deletion status
-    """
-    logger.info(f"Deleting dataset {dataset_id} by user '{username}'")
-    
-    try:
-        # Verify dataset exists
-        dataset = dataset_service.get_dataset(dataset_id)
-        if not dataset:
-            logger.error(f"Dataset not found with ID: {dataset_id}")
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Dataset not found"
-            )
-        
-        # Delete from MongoDB and MinIO
-        success = dataset_service.delete_dataset(dataset_id)
-        
-        if success:
-            logger.info(f"Dataset {dataset_id} deleted successfully")
-            return {"status": "success", "message": "Dataset deleted successfully"}
-        else:
-            logger.error(f"Failed to delete dataset {dataset_id}")
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Failed to delete dataset"
-            )
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Failed to delete dataset {dataset_id}: {e}", exc_info=True)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to delete dataset: {str(e)}"
         )
