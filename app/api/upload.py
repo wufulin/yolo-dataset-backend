@@ -10,7 +10,7 @@ from app.config import settings
 from app.schemas.upload import UploadComplete, UploadResponse
 from app.services.dataset_service import dataset_service
 from app.services.minio_service import minio_service
-from app.services.yolo_validator import yolo_validator
+from app.utils.yolo_validator import yolo_validator
 from app.utils.file_utils import ensure_directory, safe_remove
 from app.utils.logger import get_logger
 
@@ -108,6 +108,7 @@ async def upload_chunk(
     
     # Save chunk
     chunk_path = f"{session['temp_file']}.part{chunk_index}"
+    
     try:
         with open(chunk_path, "wb") as buffer:
             content = await file.read()
@@ -196,8 +197,11 @@ async def process_dataset(zip_path: str, dataset_info: Optional[any]) -> dict:
     try:
         dataset_root = yolo_validator.extract_zip(zip_path, extract_dir)
         
+        # Determine dataset type
+        dataset_type = yolo_validator.get_dataset_type(dataset_root)
+
         # Validate YOLO format
-        is_valid, message = yolo_validator.validate_dataset(dataset_root)
+        is_valid, message = yolo_validator.validate_dataset(dataset_root, dataset_type)
         if not is_valid:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -210,8 +214,6 @@ async def process_dataset(zip_path: str, dataset_info: Optional[any]) -> dict:
         if dataset_yaml:
             yaml_data = yolo_validator.parse_dataset_yaml(dataset_yaml)
         
-        # Determine dataset type
-        dataset_type = yolo_validator.get_dataset_type(dataset_root)
         class_names = yaml_data.get('names', [])
         
         # Create dataset in MongoDB
@@ -227,7 +229,7 @@ async def process_dataset(zip_path: str, dataset_info: Optional[any]) -> dict:
         
         dataset_id = dataset_service.create_dataset(dataset_data)
         
-        # Process images and annotations
+        # Process images
         processed_count = await process_images(
             dataset_root, dataset_id, dataset_type, class_names, yaml_data
         )
@@ -264,80 +266,47 @@ async def process_images(dataset_root: str, dataset_id: str, dataset_type: str,
     
     # Process each split (train, val, test)
     for split in ['train', 'val', 'test']:
-        split_key = f"{split}_split" if split == 'train' else f"{split}"
-        split_path = yaml_data.get(split_key)
+        split_path = yaml_data.get(split)
         
         if not split_path or not os.path.exists(os.path.join(dataset_root, split_path)):
             continue
         
+            
+            # train_images, train_annotations, train_size = self.process_split("train")
+            
+            # # 4. Process validation set
+            # val_images, val_annotations, val_size = self.process_split("val")
+            
+            # # 5. Update statistics
+            # self.update_dataset_stats(
+            #     train_images, train_annotations, train_size,
+            #     val_images, val_annotations, val_size
+            # )
+            return processed_count  
         # Process images in this split
-        split_processed = 0
-        for image_file in find_image_files(os.path.join(dataset_root, split_path)):
-            try:
-                await process_single_image(
-                    image_file, dataset_id, split, dataset_type,
-                    class_names, dataset_root
-                )
-                split_processed += 1
-                processed_count += 1                
-            except Exception as e:
-                logger.error(f"Error processing image {image_file}: {str(e)}", exc_info=True)
-                continue
+        # split_processed = 0
+        # for image_file in find_image_files(os.path.join(dataset_root, split_path)):
+
+        # # Phase 2: Batch upload to MinIO
+        # logger.info(f"\n  Phase 2: Batch uploading {len(upload_list)} images to MinIO...")
+        # upload_result = minio_service.upload_files(
+        #     upload_list,
+        #     max_workers=15,  # Use more workers for better performance
+        #     max_retries=3,
+        #     retry_delay=1.0
+        # )
+        #     try:
+        #         await process_single_image(
+        #             image_file, dataset_id, split, dataset_type,
+        #             class_names, dataset_root
+        #         )
+        #         split_processed += 1
+        #         processed_count += 1                
+        #     except Exception as e:
+        #         logger.error(f"Error processing image {image_file}: {str(e)}", exc_info=True)
+        #         continue
     
     return processed_count
-
-
-async def process_single_image(image_path: str, dataset_id: str, split: str,
-                              dataset_type: str, class_names: List[str],
-                              dataset_root: str) -> None:
-    """
-    Process a single image and its annotations.
-    
-    Args:
-        image_path: Path to image file
-        dataset_id: Dataset ID
-        split: Dataset split
-        dataset_type: Type of dataset
-        class_names: List of class names
-        dataset_root: Root directory of dataset
-    """
-    # Upload image to MinIO
-    object_name = f"{dataset_id}/{os.path.basename(image_path)}"
-    image_url = minio_service.upload_file(image_path, object_name)
-    
-    # Find and parse annotations
-    annotation_path = find_annotation_path(image_path, dataset_root)
-    annotations = []
-    if annotation_path and os.path.exists(annotation_path):
-        annotations = yolo_validator.parse_annotations(
-            annotation_path, dataset_type, class_names
-        )
-    
-    # Create image metadata
-    image_data = {
-        "dataset_id": dataset_id,
-        "filename": os.path.basename(image_path),
-        "file_path": object_name,
-        "width": 0,  # Would need to read image dimensions
-        "height": 0,
-        "split": split,
-        "annotations": annotations
-    }
-    
-    dataset_service.create_image(image_data)
-
-
-def find_image_files(directory: str) -> List[str]:
-    """Find all image files in directory."""
-    image_extensions = {'.jpg', '.jpeg', '.png', '.bmp', '.tiff', '.tif'}
-    image_files = []
-    
-    for root, _, files in os.walk(directory):
-        for file in files:
-            if any(file.lower().endswith(ext) for ext in image_extensions):
-                image_files.append(os.path.join(root, file))
-    
-    return image_files
 
 
 def find_annotation_path(image_path: str, dataset_root: str) -> Optional[str]:

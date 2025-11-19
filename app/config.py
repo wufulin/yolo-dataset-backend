@@ -35,7 +35,7 @@ class Settings(BaseSettings):
     allowed_image_formats: list = ["JPEG", "JPG", "PNG", "BMP", "TIFF"]
     max_upload_size: int = 100 * 1024 * 1024 * 1024  # 100GB
     upload_chunk_size: int = 10 * 1024 * 1024  # 10MB
-    temp_dir: str = "/tmp/yolo_uploads"
+    temp_dir: str = "/tmp/yolo_datasets_upload"
     
     # 简化JWT配置
     jwt_algorithm: str = "HS256"

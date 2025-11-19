@@ -11,9 +11,9 @@ import os
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Tuple
-
+from typing import Any, Dict, Tuple
 import yaml
+
 from bson import ObjectId
 from minio import Minio
 from minio.error import S3Error
@@ -26,6 +26,8 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from app.config import settings
 from app.utils.logger import get_logger
 from app.services.minio_service import minio_service
+from app.services import image_service
+from app.utils import yolo_validator
 
 logger = get_logger(__name__)
 
@@ -149,77 +151,6 @@ class YOLODatasetImporter:
             img_format = img.format.lower() if img.format else 'jpg'
             return width, height, img_format
     
-    def parse_yolo_annotation(self, label_path: Path, class_names: List[str]) -> List[Dict[str, Any]]:
-        """
-        Parse YOLO format annotation file
-        
-        Args:
-            label_path: Path to annotation file
-            class_names: List of class names
-        
-        Returns:
-            List of annotations
-        """
-        annotations = []
-        
-        if not label_path.exists():
-            return annotations
-        
-        with open(label_path, 'r') as f:
-            lines = f.readlines()
-        
-        for line_num, line in enumerate(lines, 1):
-            line = line.strip()
-            if not line:
-                continue
-            
-            try:
-                parts = line.split()
-                if len(parts) < 5:
-                    logger.error(f"  ⚠ Skipping invalid line {line_num}: {line}")
-                    continue
-                
-                class_id = int(parts[0])
-                x_center = float(parts[1])
-                y_center = float(parts[2])
-                width = float(parts[3])
-                height = float(parts[4])
-                
-                # Validate normalized coordinates
-                if not (0 <= x_center <= 1 and 0 <= y_center <= 1 and 0 <= width <= 1 and 0 <= height <= 1):
-                    logger.error(f"  ⚠ Skipping out-of-range annotation line {line_num}: {line}")
-                    continue
-                
-                if class_id >= len(class_names):
-                    logger.error(f"  ⚠ Skipping unknown class ID {class_id} (line {line_num})")
-                    continue
-                
-                annotation = {
-                    "_id": ObjectId(),
-                    "annotation_type": "detect",
-                    "class_id": class_id,
-                    "class_name": class_names[class_id],
-                    "bbox": {
-                        "x_center": x_center,
-                        "y_center": y_center,
-                        "width": width,
-                        "height": height
-                    },
-                    "confidence": None,
-                    "is_crowd": False,
-                    "area": width * height,
-                    "metadata": {},
-                    "created_at": datetime.utcnow(),
-                    "updated_at": datetime.utcnow()
-                }
-                
-                annotations.append(annotation)
-                
-            except (ValueError, IndexError) as e:
-                logger.error(f"  ⚠ Parse error (line {line_num}): {e}")
-                continue
-        
-        return annotations
     
     def create_dataset(self) -> str:
         """
@@ -282,7 +213,9 @@ class YOLODatasetImporter:
             return 0, 0, 0
         
         # Get all image files
-        image_files = list(images_dir.glob("*.jpg")) + list(images_dir.glob("*.png"))
+        image_extensions = {'.jpg', '.jpeg', '.png', '.bmp', '.tiff', '.tif'}
+        # find all image files based on the image_extensions
+        image_files = [f for f in images_dir.glob("*") if f.suffix.lower() in image_extensions]
         
         logger.info(f"\nProcessing {split_name} split:")
         logger.info(f"  Number of images: {len(image_files)}")
@@ -292,6 +225,7 @@ class YOLODatasetImporter:
         upload_list = []
         image_data_list = []
         total_file_size = 0
+        dataset_type = yolo_validator.get_dataset_type(self.dataset_path)
         
         for image_path in image_files:
             try:
@@ -307,7 +241,7 @@ class YOLODatasetImporter:
                 label_path = labels_dir / f"{image_path.stem}.txt"
                 
                 # Parse annotations
-                annotations = self.parse_yolo_annotation(label_path, self.class_names)
+                annotations = yolo_validator.parse_annotations(label_path, dataset_type, self.class_names)
                 
                 # Set image_id and dataset_id for annotations
                 image_id = ObjectId()
@@ -324,6 +258,10 @@ class YOLODatasetImporter:
                     content_type = "image/png"
                 elif image_path.suffix.lower() in ['.jpg', '.jpeg']:
                     content_type = "image/jpeg"
+                elif image_path.suffix.lower() in ['.bmp']:
+                    content_type = "image/bmp"
+                elif image_path.suffix.lower() in ['.tiff', '.tif']:
+                    content_type = "image/tiff"
                 
                 # Add to upload list: (local_path, minio_path, content_type)
                 upload_list.append((str(image_path), minio_file_path, content_type))
@@ -386,9 +324,8 @@ class YOLODatasetImporter:
         
         # Batch insert to database
         if images_to_insert:
-            self.images_collection.insert_many(images_to_insert)
-            image_count = len(images_to_insert)
-            logger.info(f"  ✓ Inserted {image_count} image records to database")
+            inserted_count = image_service.bulk_save_images(images_to_insert)
+            image_count = inserted_count
         
         # Log failed uploads
         if upload_result['failed_list']:

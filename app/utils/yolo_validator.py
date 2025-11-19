@@ -1,6 +1,7 @@
 """YOLO format validation and parsing service."""
 import os
 import zipfile
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
 import yaml
@@ -17,12 +18,13 @@ class YOLOValidator:
         """Initialize validator."""
         self.supported_types = ['detect', 'obb', 'segment', 'pose', 'classify']
     
-    def validate_dataset(self, dataset_path: str) -> Tuple[bool, str]:
+    def validate_dataset(self, dataset_path: str, dataset_type: str) -> Tuple[bool, str]:
         """
         Validate YOLO dataset using Ultralytics check_dataset.
         
         Args:
             dataset_path: Path to dataset directory
+            dataset_type: Type of dataset
             
         Returns:
             Tuple[bool, str]: (is_valid, message)
@@ -32,7 +34,7 @@ class YOLOValidator:
             # Import ultralytics and check dataset
             from ultralytics.hub import check_dataset
             
-            result = check_dataset(dataset_path)
+            result = check_dataset(dataset_path, dataset_type)
             if isinstance(result, str) and "error" in result.lower():
                 logger.error(f"Dataset validation failed: {result}")
                 return False, result
@@ -225,46 +227,84 @@ class YOLOValidator:
                 if dataset_type == 'detect':
                     if len(parts) >= 5:
                         annotation = {
+                            "annotation_type": "detect",
                             "class_id": class_id,
                             "class_name": class_name,
-                            "x_center": float(parts[1]),
-                            "y_center": float(parts[2]),
-                            "width": float(parts[3]),
-                            "height": float(parts[4])
+                            "bbox": {
+                                "x_center": float(parts[1]),
+                                "y_center": float(parts[2]),
+                                "width": float(parts[3]),
+                                "height": float(parts[4])
+                            },
+                            "confidence": None,
+                            "is_crowd": False,
+                            "area": float(parts[3]) * float(parts[4]),
+                            "metadata": {},
+                            "created_at": datetime.now(timezone.utc),
+                            "updated_at": datetime.now(timezone.utc)
                         }
                         annotations.append(annotation)
                 
                 elif dataset_type == 'obb':
                     if len(parts) >= 9:
                         annotation = {
+                            "annotation_type": "obb",
                             "class_id": class_id,
                             "class_name": class_name,
-                            "points": [float(x) for x in parts[1:9]]
+                            "points": [float(x) for x in parts[1:9]],
+                            "confidence": None,
+                            "is_crowd": False,
+                            "area": None,
+                            "metadata": {},
+                            "created_at": datetime.now(timezone.utc),
+                            "updated_at": datetime.now(timezone.utc)
                         }
                         annotations.append(annotation)
                 
                 elif dataset_type == 'segment':
                     if len(parts) > 1:
                         annotation = {
+                            "annotation_type": "segment",
                             "class_id": class_id,
                             "class_name": class_name,
-                            "points": [float(x) for x in parts[1:]]
+                            "points": [float(x) for x in parts[1:]],
+                            "confidence": None,
+                            "is_crowd": False,
+                            "area": None,
+                            "metadata": {},
+                            "created_at": datetime.now(timezone.utc),
+                            "updated_at": datetime.now(timezone.utc)
                         }
                         annotations.append(annotation)
                 
                 elif dataset_type == 'pose':
                     if len(parts) > 1:
                         annotation = {
+                            "annotation_type": "pose",
                             "class_id": class_id,
                             "class_name": class_name,
-                            "keypoints": [float(x) for x in parts[1:]]
+                            "keypoints": [float(x) for x in parts[1:]],
+                            "skeleton": None,
+                            "confidence": None,
+                            "is_crowd": False,
+                            "area": None,
+                            "metadata": {},
+                            "created_at": datetime.now(timezone.utc),
+                            "updated_at": datetime.now(timezone.utc)
                         }
                         annotations.append(annotation)
                 
                 elif dataset_type == 'classify':
                     annotation = {
+                        "annotation_type": "classify",
                         "class_id": class_id,
-                        "class_name": class_name
+                        "class_name": class_name,
+                        "confidence": None,
+                        "is_crowd": False,
+                        "area": None,
+                        "metadata": {},
+                        "created_at": datetime.now(timezone.utc),
+                        "updated_at": datetime.now(timezone.utc)
                     }
                     annotations.append(annotation)
                     

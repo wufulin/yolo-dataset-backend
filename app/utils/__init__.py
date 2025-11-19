@@ -12,6 +12,8 @@ from app.utils.logger import (
     get_logger
 )
 
+from app.utils.yolo_validator import YOLOValidator, yolo_validator
+
 __all__ = [
     "ensure_directory",
     "safe_remove", 
@@ -19,5 +21,7 @@ __all__ = [
     "get_file_size",
     "is_valid_filename",
     "setup_logger",
-    "get_logger"
+    "get_logger",
+    "YOLOValidator",
+    "yolo_validator"
 ]

@@ -2,9 +2,7 @@
 from typing import Any, Dict, List, Optional
 
 from bson import ObjectId
-from pymongo.errors import PyMongoError
 
-from app.models.image import ImageMetadata
 from app.services.db_service import db_service
 from app.utils.logger import get_logger
 
@@ -19,48 +17,43 @@ class ImageService:
         self.db = db_service
         self.images = self.db.images
     
-    def create_image(self, image: ImageMetadata) -> str:
+    def bulk_save_images(self, image_list: List[Dict[str, Any]]) -> int:
         """
-        Create image metadata.
+        Bulk save images to database.
         
         Args:
-            image: ImageMetadata object
+            image_list: List of image dictionaries to insert
             
         Returns:
-            str: Created image ID
+            int: Number of images successfully inserted
             
         Raises:
             Exception: For database errors
         """
+        if not image_list:
+            logger.warning("Empty image list provided for bulk save")
+            return 0
+        
         try:
-            # Convert to dict with alias
-            image_dict = image.model_dump(by_alias=True, mode='python')
+            # Ensure all ObjectIds are properly converted
+            for image in image_list:
+                if "_id" in image and isinstance(image["_id"], str):
+                    image["_id"] = ObjectId(image["_id"])
+                elif "_id" not in image:
+                    image["_id"] = ObjectId()
+                
+                if "dataset_id" in image and isinstance(image["dataset_id"], str):
+                    image["dataset_id"] = ObjectId(image["dataset_id"])
             
-            # Ensure _id is ObjectId, not string (model_dump serializes PyObjectId to string)
-            if "_id" in image_dict:
-                if isinstance(image_dict["_id"], str):
-                    image_dict["_id"] = ObjectId(image_dict["_id"])
-                elif not isinstance(image_dict["_id"], ObjectId):
-                    image_dict["_id"] = ObjectId()
-            else:
-                image_dict["_id"] = ObjectId()
+            result = self.images.insert_many(image_list)
+            inserted_count = len(result.inserted_ids)
+            logger.info(f"Bulk inserted {inserted_count} images to database")
+            return inserted_count
             
-            # Ensure dataset_id is ObjectId (model_dump serializes PyObjectId to string)
-            if "dataset_id" in image_dict:
-                from app.models.base import PyObjectId
-                if isinstance(image_dict["dataset_id"], str):
-                    image_dict["dataset_id"] = ObjectId(image_dict["dataset_id"])
-                elif isinstance(image_dict["dataset_id"], PyObjectId):
-                    image_dict["dataset_id"] = ObjectId(image_dict["dataset_id"])
-            
-            result = self.images.insert_one(image_dict)
-            logger.info(f"Created image: {result.inserted_id}")
-            return str(result.inserted_id)
-            
-        except PyMongoError as e:
-            logger.error(f"Failed to create image: {e}", exc_info=True)
-            raise Exception(f"Failed to create image: {e}")
-    
+        except Exception as e:
+            logger.error(f"Failed to bulk save images: {e}", exc_info=True)
+            raise Exception(f"Failed to bulk save images: {e}")
+
     def get_image(self, image_id: str) -> Optional[Dict[str, Any]]:
         """
         Get image by ID.
