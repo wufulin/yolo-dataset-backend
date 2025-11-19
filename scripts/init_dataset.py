@@ -5,6 +5,7 @@ Reads YOLO format datasets and inserts them into MongoDB
 Usage:
     python scripts/init_dataset.py
 """
+import argparse
 import hashlib
 import os
 import sys
@@ -227,15 +228,16 @@ class YOLODatasetImporter:
             Dataset ID
         """
         # Check if dataset with same name already exists
-        existing = self.datasets_collection.find_one({"name": "COCO8-Detect"})
+        dataset_name = self.dataset_path.name
+        existing = self.datasets_collection.find_one({"name": dataset_name})
         if existing:
-            logger.error(f"⚠ Dataset 'COCO8-Detect' already exists, deleting old data...")
+            logger.error(f"⚠ Dataset {dataset_name} already exists, deleting old data...")
             self.datasets_collection.delete_one({"_id": existing["_id"]})
             self.images_collection.delete_many({"dataset_id": existing["_id"]})
         
         dataset_doc = {
             "_id": ObjectId(),
-            "name": "COCO8-Detect",
+            "name": dataset_name,
             "description": "COCO8 dataset for object detection (first 8 images from COCO train2017)",
             "dataset_type": "detect",
             "class_names": self.class_names,
@@ -334,7 +336,7 @@ class YOLODatasetImporter:
                     "split": split_name,
                     "annotations": annotations,
                     "metadata": {
-                        "source": "coco8-detect",
+                        "source": self.dataset_path.name,
                         "original_path": str(image_path.relative_to(self.dataset_path))
                     },
                     "is_annotated": len(annotations) > 0,
@@ -437,9 +439,13 @@ class YOLODatasetImporter:
 
 def main():
     """Main function"""
-    # COCO8 dataset path
-    dataset_path = "data/coco8-detect"
+    parser = argparse.ArgumentParser(description="Initialize YOLO dataset")
+    parser.add_argument("--dataset_path", type=str, default="../data/coco8-detect-1024MB", help="Path to the dataset")
     
+    args = parser.parse_args()
+
+    dataset_path = args.dataset_path
+
     # Check if path exists
     if not os.path.exists(dataset_path):
         logger.error(f"✗ Error: Dataset path does not exist: {dataset_path}")
