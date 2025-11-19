@@ -80,18 +80,10 @@ class MongoService:
             Exception: For other database errors
         """
         try:
-            # Convert to dict with alias
-            dataset_dict = dataset.dict(by_alias=True)
-            
-            # Ensure _id is ObjectId, not string
-            if "_id" in dataset_dict and isinstance(dataset_dict["_id"], str):
-                dataset_dict["_id"] = ObjectId(dataset_dict["_id"])
-            elif "_id" not in dataset_dict or not isinstance(dataset_dict["_id"], ObjectId):
-                # Generate new ObjectId if missing or invalid
-                dataset_dict["_id"] = ObjectId()
+            dataset_dict = dataset.model_dump(by_alias=True, mode='python')
             
             logger.info(f"Inserting dataset with _id: {dataset_dict['_id']} (type: {type(dataset_dict['_id'])})")
-            
+                       
             result = self.datasets.insert_one(dataset_dict)
             
             # Verify insertion was successful
@@ -114,7 +106,7 @@ class MongoService:
             logger.error(f"Failed to create dataset: {e}", exc_info=True)
             raise Exception(f"Failed to create dataset: {e}")
     
-    def get_dataset(self, dataset_id: str) -> Optional[Dict[str, Any]]:
+    def get_dataset(self, dataset_id: str) -> Optional[Dataset]:
         """
         Get dataset by ID.
         
@@ -128,23 +120,13 @@ class MongoService:
             # Validate ObjectId format
             if not ObjectId.is_valid(dataset_id):
                 logger.info(f"Invalid ObjectId format: {dataset_id}")
-                return None
+                raise ValueError(f"Invalid ObjectId format: {dataset_id}")
             
             dataset = self.datasets.find_one({"_id": ObjectId(dataset_id)})
-            if dataset:
-                dataset["id"] = str(dataset["_id"])
-                del dataset["_id"]  # Remove _id and use id instead
-                # Convert any other ObjectId fields to string
-                for key, value in dataset.items():
-                    if isinstance(value, ObjectId):
-                        dataset[key] = str(value)
-                logger.info(f"Retrieved dataset: {dataset_id}")
-            else:
-                logger.info(f"No dataset found with ID: {dataset_id}")
             return dataset
         except Exception as e:
             logger.error(f"Error in get_dataset: {e}", exc_info=True)
-            return None
+            raise Exception(f"Error in get_dataset: {e}")
     
     def list_datasets(self, skip: int = 0, limit: int = 100) -> List[Dict[str, Any]]:
         """
@@ -207,17 +189,23 @@ class MongoService:
             str: Created image ID
         """
         # Convert to dict with alias
-        image_dict = image.dict(by_alias=True)
+        image_dict = image.model_dump(by_alias=True, mode='python')
         
-        # Ensure _id is ObjectId, not string
-        if "_id" in image_dict and isinstance(image_dict["_id"], str):
-            image_dict["_id"] = ObjectId(image_dict["_id"])
-        elif "_id" not in image_dict or not isinstance(image_dict["_id"], ObjectId):
+        # Ensure _id is ObjectId, not string (model_dump serializes PyObjectId to string)
+        if "_id" in image_dict:
+            if isinstance(image_dict["_id"], str):
+                image_dict["_id"] = ObjectId(image_dict["_id"])
+            elif not isinstance(image_dict["_id"], ObjectId):
+                image_dict["_id"] = ObjectId()
+        else:
             image_dict["_id"] = ObjectId()
         
-        # Ensure dataset_id is ObjectId if present
-        if "dataset_id" in image_dict and isinstance(image_dict["dataset_id"], str):
-            image_dict["dataset_id"] = ObjectId(image_dict["dataset_id"])
+        # Ensure dataset_id is ObjectId (model_dump serializes PyObjectId to string)
+        if "dataset_id" in image_dict:
+            if isinstance(image_dict["dataset_id"], str):
+                image_dict["dataset_id"] = ObjectId(image_dict["dataset_id"])
+            elif isinstance(image_dict["dataset_id"], PyObjectId):
+                image_dict["dataset_id"] = ObjectId(image_dict["dataset_id"])
         
         result = self.images.insert_one(image_dict)
         return str(result.inserted_id)

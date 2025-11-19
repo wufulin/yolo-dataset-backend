@@ -65,14 +65,6 @@ async def create_dataset(
         # Create dataset in MongoDB
         dataset_id = mongo_service.create_dataset(dataset)
         
-        # Verify dataset_id is valid
-        if not dataset_id:
-            logger.error("Dataset creation failed: No ID returned")
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Dataset creation failed: No ID returned"
-            )
-        
         # Retrieve and return created dataset
         created_dataset = mongo_service.get_dataset(dataset_id)
         if not created_dataset:
@@ -84,14 +76,6 @@ async def create_dataset(
         
         logger.info(f"Dataset '{dataset_data.name}' created successfully with ID: {dataset_id}")
         return DatasetResponse(**created_dataset)
-        
-    except ValueError as e:
-        # Handle duplicate name error
-        logger.error(f"Dataset creation failed - duplicate name: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=str(e)
-        )
     except HTTPException:
         # Re-raise HTTPException as-is
         raise

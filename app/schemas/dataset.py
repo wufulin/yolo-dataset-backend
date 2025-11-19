@@ -3,7 +3,9 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
+from bson import ObjectId
 
+from app.models.base import PyObjectId
 
 class DatasetCreate(BaseModel):
     """Schema for dataset creation."""
@@ -25,7 +27,7 @@ class DatasetCreate(BaseModel):
 
 class DatasetResponse(BaseModel):
     """Schema for dataset response."""
-    id: str = Field(..., description="Dataset ID")
+    id: PyObjectId = Field(..., alias="_id", description="Dataset ID")
     name: str = Field(..., description="Dataset name")
     description: Optional[str] = Field(None, description="Dataset description")
     dataset_type: str = Field(..., description="Dataset type")
@@ -36,7 +38,10 @@ class DatasetResponse(BaseModel):
     created_at: datetime = Field(..., description="Creation timestamp")
     updated_at: datetime = Field(..., description="Update timestamp")
     
-    model_config = {"from_attributes": True}
+    model_config = {
+        "from_attributes": True,
+        "json_encoders": {ObjectId: str}
+    }
 
 
 class ImageResponse(BaseModel):
