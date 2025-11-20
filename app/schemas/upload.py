@@ -15,7 +15,6 @@ class UploadResponse(BaseModel):
 
 class UploadComplete(BaseModel):
     """Schema for upload completion."""
-    upload_id: str = Field(..., description="Upload session ID")
     filename: str = Field(..., description="Original filename")
     dataset_info: Optional[DatasetCreate] = Field(None, description="Dataset information")
 
