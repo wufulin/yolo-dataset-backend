@@ -3,7 +3,7 @@ from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from app.api import annotations, datasets, upload
+from app.api import datasets, upload
 from app.auth import authenticate_user
 from app.config import settings
 from app.utils.logger import get_logger
@@ -49,11 +49,6 @@ def create_application() -> FastAPI:
         upload.router,
         prefix="/api/v1",
         tags=["upload"]
-    )
-    application.include_router(
-        annotations.router, 
-        prefix="/api/v1",
-        tags=["annotations"]
     )
     
     logger.info(f"Application '{settings.app_name}' v{settings.app_version} created successfully")

@@ -259,11 +259,10 @@ yolo-dataset-backend/
 │   ├── models/
 │   │   ├── __init__.py
 │   │   ├── dataset.py
-│   │   └── annotation.py
+│   │   └── base.py
 │   ├── schemas/
 │   │   ├── __init__.py
 │   │   ├── dataset.py
-│   │   └── annotation.py
 │   ├── services/
 │   │   ├── __init__.py
 │   │   ├── minio_service.py
@@ -277,6 +276,4 @@ yolo-dataset-backend/
 │       ├── __init__.py
 │       └── file_utils.py
 ├── requirements.txt
-├── Dockerfile
-└── docker-compose.yml
 ```

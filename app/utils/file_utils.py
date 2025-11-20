@@ -3,7 +3,57 @@ import hashlib
 import os
 import shutil
 from pathlib import Path
+from typing import Optional
+import zipfile
 
+
+def extract_skip_root_safe(zip_path: str, extract_dir: str, root_folder_name: Optional[str] = None) -> None:
+    """
+    解压zip文件，跳过指定的根目录
+    
+    Args:
+        zip_path: zip文件路径
+        extract_dir: 解压目标目录
+        root_folder_name: 要跳过的根目录名，如果为None则自动检测
+    """
+    with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+        # 如果未指定根目录名，自动检测第一个目录
+        if root_folder_name is None:
+            names = zip_ref.namelist()
+            for name in names:
+                if '/' in name and not name.startswith('__MACOSX'):
+                    root_folder_name = name.split('/')[0]
+                    break
+        
+        # 确保目标目录存在
+        os.makedirs(extract_dir, exist_ok=True)
+        
+        # 提取文件
+        for member in zip_ref.namelist():
+            # 跳过系统文件（如macOS的__MACOSX目录）
+            if member.startswith('__MACOSX/'):
+                continue
+                
+            # 跳过根目录条目
+            if member == root_folder_name + '/':
+                continue
+                
+            # 处理文件路径
+            if member.startswith(root_folder_name + '/'):
+                # 移除根目录部分
+                new_member = member[len(root_folder_name + '/'):]
+                
+                if new_member:  # 确保不是空字符串
+                    # 提取文件
+                    source = zip_ref.open(member)
+                    target_path = os.path.join(extract_dir, new_member)
+                    
+                    # 确保目标目录存在
+                    os.makedirs(os.path.dirname(target_path), exist_ok=True)
+                    
+                    # 写入文件
+                    with open(target_path, 'wb') as target:
+                        target.write(source.read())
 
 def ensure_directory(path: str) -> None:
     """

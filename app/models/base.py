@@ -40,14 +40,3 @@ class PyObjectId(ObjectId):
         """Get JSON schema for ObjectId."""
         return {"type": "string", "format": "objectid"}
 
-
-class MongoBaseModel(BaseModel):
-    """Base model for MongoDB documents."""
-    
-    model_config = ConfigDict(
-        arbitrary_types_allowed=True,
-        json_encoders={ObjectId: str},
-        from_attributes=True,
-        populate_by_name=True
-    )
-

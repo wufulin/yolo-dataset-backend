@@ -1,5 +1,6 @@
 """YOLO format validation and parsing service."""
 import os
+from pathlib import Path
 import zipfile
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
@@ -7,6 +8,7 @@ from typing import Any, Dict, List, Optional, Tuple
 import yaml
 
 from app.utils.logger import get_logger
+from app.utils.file_utils import extract_skip_root_safe
 
 logger = get_logger(__name__)
 
@@ -59,45 +61,31 @@ class YOLOValidator:
         Returns:
             str: Path to dataset root directory
         """
-        logger.info(f"Extracting ZIP file: {zip_path} to {extract_dir}")
+        extract_path = Path(extract_dir).resolve()
+        extract_path.mkdir(mode=0o644, parents=True, exist_ok=True)
+        target_dir = str(extract_path)
+
+        logger.info(f"Extracting ZIP file: {zip_path} to {target_dir}")
+            
         try:
-            with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-                zip_ref.extractall(extract_dir)
-            logger.info(f"ZIP extraction completed: {zip_path}")
-            
-            # Look for dataset.yaml or data.yaml
-            dataset_yaml = self._find_dataset_yaml(extract_dir)
-            if dataset_yaml:
-                dataset_root = os.path.dirname(dataset_yaml)
-                logger.info(f"Found dataset YAML at: {dataset_yaml}, root: {dataset_root}")
-                return dataset_root
-            
-            # If no YAML found, return the extract directory
-            logger.info(f"No dataset YAML found in {extract_dir}, using extract directory as root")
-            return extract_dir
+            extract_skip_root_safe(zip_path, target_dir)
+            logger.info(f"ZIP extraction completed: {zip_path} to {target_dir}")
+            return target_dir
         except Exception as e:
             logger.error(f"Failed to extract ZIP file {zip_path}: {e}", exc_info=True)
             raise Exception(f"Failed to extract ZIP file {zip_path}: {str(e)}")
     
-    def _find_dataset_yaml(self, directory: str) -> Optional[str]:
-        """
-        Find dataset YAML file in directory.
-        
-        Args:
-            directory: Directory to search
-            
-        Returns:
-            Optional[str]: Path to YAML file or None
-        """
-        logger.info(f"Searching for dataset YAML in: {directory}")
-        for root, _, files in os.walk(directory):
-            for file in files:
-                if file in ['dataset.yaml', 'data.yaml']:
-                    yaml_path = os.path.join(root, file)
-                    logger.info(f"Found dataset YAML: {yaml_path}")
-                    return yaml_path
-        logger.info(f"No dataset YAML found in: {directory}")
-        return None
+    def find_dataset_yaml(self, directory: str) -> Path:
+        """Find dataset YAML file in directory."""
+        directory = Path(directory)
+        if not directory.exists():
+            logger.error(f"Directory does not exist: {directory}")
+            return None
+        yaml_files = list(directory.glob("*.yaml")) + list(directory.glob("*.yml"))
+        if yaml_files:
+            return yaml_files[0]
+        logger.error(f"No dataset YAML found in: {directory}")
+        raise Exception(f"No dataset YAML found in: {directory}")
     
     def parse_dataset_yaml(self, yaml_path: str) -> Dict[str, Any]:
         """
@@ -111,7 +99,7 @@ class YOLOValidator:
         """
         logger.info(f"Parsing dataset YAML: {yaml_path}")
         try:
-            with open(yaml_path, 'r') as f:
+            with open(yaml_path, 'r', encoding='utf-8') as f:
                 data = yaml.safe_load(f)
             logger.info(f"Successfully parsed YAML file: {yaml_path}")
             return data or {}
@@ -205,7 +193,7 @@ class YOLOValidator:
         Returns:
             List[Dict]: List of annotations
         """
-        logger.info(f"Parsing annotations: {annotation_path}, type: {dataset_type}")
+        
         annotations = []
         
         try:

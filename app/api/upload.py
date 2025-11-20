@@ -1,18 +1,15 @@
 """File upload API endpoints."""
 import os
 import uuid
-from typing import List, Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 
 from app.auth import authenticate_user
 from app.config import settings
 from app.schemas.upload import UploadComplete, UploadResponse
-from app.services.dataset_service import dataset_service
-from app.services.minio_service import minio_service
-from app.utils.yolo_validator import yolo_validator
 from app.utils.file_utils import ensure_directory, safe_remove
 from app.utils.logger import get_logger
+from app.services import upload_service
 
 logger = get_logger(__name__)
 
@@ -166,9 +163,9 @@ async def complete_upload(
                 safe_remove(chunk_path)
         
         # Process the dataset
-        return await process_dataset(
+        return await upload_service.process_dataset(
             session["temp_file"],
-            upload_complete.dataset_info
+            upload_complete.dataset_info,
         )
         
     except Exception as e:
@@ -179,145 +176,3 @@ async def complete_upload(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to process dataset: {str(e)}"
         )
-
-
-async def process_dataset(zip_path: str, dataset_info: Optional[any]) -> dict:
-    """
-    Process uploaded dataset ZIP file.
-    
-    Args:
-        zip_path: Path to ZIP file
-        dataset_info: Dataset information
-        
-    Returns:
-        dict: Processing results
-    """
-    # Extract and validate dataset
-    extract_dir = os.path.join(settings.temp_dir, f"extract_{uuid.uuid4()}")
-    try:
-        dataset_root = yolo_validator.extract_zip(zip_path, extract_dir)
-        
-        # Determine dataset type
-        dataset_type = yolo_validator.get_dataset_type(dataset_root)
-
-        # Validate YOLO format
-        is_valid, message = yolo_validator.validate_dataset(dataset_root, dataset_type)
-        if not is_valid:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Invalid YOLO dataset: {message}"
-            )
-        
-        # Parse dataset information
-        dataset_yaml = yolo_validator._find_dataset_yaml(dataset_root)
-        yaml_data = {}
-        if dataset_yaml:
-            yaml_data = yolo_validator.parse_dataset_yaml(dataset_yaml)
-        
-        class_names = yaml_data.get('names', [])
-        
-        # Create dataset in MongoDB
-        dataset_data = {
-            "name": dataset_info.name if dataset_info else "Unnamed Dataset",
-            "description": dataset_info.description if dataset_info else None,
-            "dataset_type": dataset_type,
-            "class_names": class_names,
-            "num_images": 0,
-            "num_annotations": 0,
-            "splits": {}
-        }
-        
-        dataset_id = dataset_service.create_dataset(dataset_data)
-        
-        # Process images
-        processed_count = await process_images(
-            dataset_root, dataset_id, dataset_type, class_names, yaml_data
-        )
-        
-        return {
-            "status": "success",
-            "dataset_id": dataset_id,
-            "processed_images": processed_count,
-            "dataset_type": dataset_type
-        }
-        
-    finally:
-        # Cleanup temporary files
-        safe_remove(extract_dir)
-        safe_remove(zip_path)
-
-
-async def process_images(dataset_root: str, dataset_id: str, dataset_type: str,
-                        class_names: List[str], yaml_data: dict) -> int:
-    """
-    Process all images and annotations in dataset.
-    
-    Args:
-        dataset_root: Root directory of dataset
-        dataset_id: Dataset ID in MongoDB
-        dataset_type: Type of dataset
-        class_names: List of class names
-        yaml_data: YAML configuration data
-        
-    Returns:
-        int: Number of processed images
-    """
-    processed_count = 0
-    
-    # Process each split (train, val, test)
-    for split in ['train', 'val', 'test']:
-        split_path = yaml_data.get(split)
-        
-        if not split_path or not os.path.exists(os.path.join(dataset_root, split_path)):
-            continue
-        
-            
-            # train_images, train_annotations, train_size = self.process_split("train")
-            
-            # # 4. Process validation set
-            # val_images, val_annotations, val_size = self.process_split("val")
-            
-            # # 5. Update statistics
-            # self.update_dataset_stats(
-            #     train_images, train_annotations, train_size,
-            #     val_images, val_annotations, val_size
-            # )
-            return processed_count  
-        # Process images in this split
-        # split_processed = 0
-        # for image_file in find_image_files(os.path.join(dataset_root, split_path)):
-
-        # # Phase 2: Batch upload to MinIO
-        # logger.info(f"\n  Phase 2: Batch uploading {len(upload_list)} images to MinIO...")
-        # upload_result = minio_service.upload_files(
-        #     upload_list,
-        #     max_workers=15,  # Use more workers for better performance
-        #     max_retries=3,
-        #     retry_delay=1.0
-        # )
-        #     try:
-        #         await process_single_image(
-        #             image_file, dataset_id, split, dataset_type,
-        #             class_names, dataset_root
-        #         )
-        #         split_processed += 1
-        #         processed_count += 1                
-        #     except Exception as e:
-        #         logger.error(f"Error processing image {image_file}: {str(e)}", exc_info=True)
-        #         continue
-    
-    return processed_count
-
-
-def find_annotation_path(image_path: str, dataset_root: str) -> Optional[str]:
-    """Find corresponding annotation file for an image."""
-    base_name = os.path.splitext(os.path.basename(image_path))[0]
-    
-    # Look for annotation in labels directory
-    labels_dir = os.path.join(dataset_root, "labels")
-    if os.path.exists(labels_dir):
-        annotation_path = os.path.join(labels_dir, f"{base_name}.txt")
-        if os.path.exists(annotation_path):
-            return annotation_path
-    
-    return None

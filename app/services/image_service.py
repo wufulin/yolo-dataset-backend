@@ -19,13 +19,13 @@ class ImageService:
     
     def bulk_save_images(self, image_list: List[Dict[str, Any]]) -> int:
         """
-        Bulk save images to database.
+        Bulk save image documents to database.
         
         Args:
             image_list: List of image dictionaries to insert
             
         Returns:
-            int: Number of images successfully inserted
+            int: Number of image documents successfully inserted
             
         Raises:
             Exception: For database errors
