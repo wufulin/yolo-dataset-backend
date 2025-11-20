@@ -1,6 +1,7 @@
 """Utility modules - provide common utility functions and classes."""
 from app.utils.file_utils import (
     extract_skip_root_safe,
+    resolve_target_directory,
     ensure_directory,
     safe_remove,
     get_file_hash,
@@ -17,6 +18,7 @@ from app.utils.yolo_validator import YOLOValidator, yolo_validator
 
 __all__ = [
     "extract_skip_root_safe",
+    "resolve_target_directory",
     "ensure_directory",
     "safe_remove", 
     "get_file_hash",

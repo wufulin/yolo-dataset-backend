@@ -1,8 +1,6 @@
 """Service for handling dataset upload operations."""
 
 import hashlib
-import os
-import uuid
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
@@ -11,10 +9,9 @@ from bson import ObjectId
 from fastapi import HTTPException, status
 from PIL import Image
 
-from app.config import settings
 from app.models.dataset import Dataset
 from app.services import dataset_service, image_service, minio_service
-from app.utils import yolo_validator
+from app.utils import resolve_target_directory, yolo_validator
 from app.utils.file_utils import safe_remove
 from app.utils.logger import get_logger
 
@@ -45,28 +42,21 @@ class UploadService:
                 detail="Dataset info is required",
             )
 
-        extract_dir = os.path.join(settings.temp_dir, f"extract_{uuid.uuid4()}")
         try:
-            # dataset_root = Path(yolo_validator.extract_zip(zip_path, extract_dir))
+            dataset_type = getattr(dataset_info, "dataset_type", "detect")
 
-            dataset_root = Path(Path(zip_path).parent / "coco8-detect").resolve()
-            logger.info(f"******Dataset root: {dataset_root}")
-
-            dataset_type = getattr(dataset_info, "dataset_type", "detect") or "detect"
-
-            dataset_yaml_path = yolo_validator.find_dataset_yaml(str(dataset_root))
-
-            yaml_data = yolo_validator.parse_dataset_yaml(str(dataset_yaml_path))
-
-            is_valid, message = yolo_validator.validate_dataset(
-                dataset_yaml_path, dataset_type
-            )
+            is_valid, message = yolo_validator.validate_dataset(zip_path, dataset_type)
             if not is_valid:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail=f"Invalid YOLO dataset: {message}",
                 )
 
+            dataset_root = resolve_target_directory(zip_path)
+            
+            dataset_yaml_path = yolo_validator.find_dataset_yaml(str(dataset_root))
+
+            yaml_data = yolo_validator.parse_dataset_yaml(str(dataset_yaml_path))
             class_names = [yaml_data['names'][i] for i in sorted(yaml_data['names'].keys())]
 
             dataset = Dataset(
@@ -98,14 +88,14 @@ class UploadService:
 
             return {
                 "status": "success",
-                "dataset_id": dataset_id,
-                "processed_images": processed_count,
+                "dataset_id": "1",
+                "processed_images": 0,
                 "dataset_type": dataset_type,
             }
         finally:
-            pass
-            # safe_remove(extract_dir)
-            # safe_remove(zip_path)
+            safe_remove(dataset_root)
+            safe_remove(zip_path)
+            safe_remove(dataset_root.parent)
 
     async def _process_images_and_annotations(
         self,

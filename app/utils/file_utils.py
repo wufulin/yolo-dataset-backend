@@ -7,6 +7,28 @@ from typing import Optional
 import zipfile
 
 
+def resolve_target_directory(zip_file_path, target_folder_name=None):
+    """
+    从zip文件路径解析目标目录路径
+    
+    Args:
+        zip_file_path: zip文件完整路径
+        target_folder_name: 目标文件夹名称，默认为None（自动从zip文件名推导）
+    
+    Returns:
+        Path: 目标目录路径对象
+    """
+    zip_path = Path(zip_file_path)
+    
+    if target_folder_name is None:
+        # 自动从zip文件名推导目录名（去掉.zip后缀）
+        target_folder_name = zip_path.stem  # 这会返回 'coco8-detect'
+    
+    # 构建目标目录路径
+    target_dir = zip_path.parent / target_folder_name
+    
+    return target_dir
+    
 def extract_skip_root_safe(zip_path: str, extract_dir: str, root_folder_name: Optional[str] = None) -> None:
     """
     解压zip文件，跳过指定的根目录
