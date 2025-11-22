@@ -24,7 +24,7 @@ class UploadSession(BaseModel):
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
     expires_at: datetime = Field(description="Session expiration time")
-    
+
     model_config = {
         "arbitrary_types_allowed": True,
         "json_encoders": {ObjectId: str},
@@ -47,4 +47,3 @@ class UploadSession(BaseModel):
             }
         }
     }
-

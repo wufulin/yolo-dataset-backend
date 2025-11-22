@@ -3,7 +3,7 @@ import os
 import sys
 
 from pymongo import ASCENDING, DESCENDING, TEXT, MongoClient
-from pymongo.errors import CollectionInvalid, OperationFailure
+from pymongo.errors import CollectionInvalid
 
 # Add project root directory to Python path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -18,7 +18,7 @@ def init_database():
     """Initialize database with collections and indexes."""
     client = MongoClient(settings.mongodb_url)
     db = client[settings.mongo_db_name]
-    
+
     # Create collections with validation
     init_datasets_collection(db)
     init_images_collection(db)
@@ -27,10 +27,10 @@ def init_database():
     init_annotations_collection(db)
     init_annotation_stats_collection(db)
     init_users_collection(db)
-    
+
     # Create initial admin user
     create_initial_admin(db)
-    
+
     logger.info("Database initialization completed successfully!")
     client.close()
 
@@ -63,7 +63,7 @@ def init_datasets_collection(db):
                     'description': 'Number of images must be a non-negative integer'
                 },
                 'num_annotations': {
-                    'bsonType': 'int', 
+                    'bsonType': 'int',
                     'minimum': 0,
                     'description': 'Number of annotations must be a non-negative integer'
                 },
@@ -74,19 +74,19 @@ def init_datasets_collection(db):
             }
         }
     }
-    
+
     try:
         db.create_collection('datasets')
     except CollectionInvalid:
         pass  # Collection already exists
-    
+
     # Apply schema validation
     db.command({
         'collMod': 'datasets',
         'validator': validation,
         'validationLevel': 'strict'
     })
-    
+
     # Create indexes
     db.datasets.create_index([('name', ASCENDING)], unique=True)
     db.datasets.create_index([('dataset_type', ASCENDING), ('created_at', DESCENDING)])
@@ -110,7 +110,7 @@ def init_images_collection(db):
                     'description': 'Filename must be a string'
                 },
                 'file_path': {
-                    'bsonType': 'string', 
+                    'bsonType': 'string',
                     'description': 'File path must be a string'
                 },
                 'split': {
@@ -124,7 +124,7 @@ def init_images_collection(db):
                 },
                 'height': {
                     'bsonType': 'int',
-                    'minimum': 1, 
+                    'minimum': 1,
                     'description': 'Image height must be a positive integer'
                 },
                 'is_annotated': {
@@ -134,18 +134,18 @@ def init_images_collection(db):
             }
         }
     }
-    
+
     try:
         db.create_collection('images')
     except CollectionInvalid:
         pass
-    
+
     db.command({
         'collMod': 'images',
         'validator': validation,
         'validationLevel': 'strict'
     })
-    
+
     # Create indexes
     db.images.create_index([('dataset_id', ASCENDING), ('split', ASCENDING), ('created_at', DESCENDING)])
     db.images.create_index([('dataset_id', ASCENDING), ('is_annotated', ASCENDING)])
@@ -162,7 +162,7 @@ def init_upload_sessions_collection(db):
         db.create_collection('upload_sessions')
     except CollectionInvalid:
         pass
-    
+
     db.upload_sessions.create_index([('upload_id', ASCENDING)], unique=True)
     db.upload_sessions.create_index([('expires_at', ASCENDING)], expireAfterSeconds=0)
     db.upload_sessions.create_index([('status', ASCENDING), ('created_at', DESCENDING)])
@@ -175,7 +175,7 @@ def init_dataset_statistics_collection(db):
         db.create_collection('dataset_statistics')
     except CollectionInvalid:
         pass
-    
+
     db.dataset_statistics.create_index([('dataset_id', ASCENDING), ('date', DESCENDING)])
     db.dataset_statistics.create_index([('date', DESCENDING)])
 
@@ -207,18 +207,18 @@ def init_users_collection(db):
             }
         }
     }
-    
+
     try:
         db.create_collection('users')
     except CollectionInvalid:
         pass
-    
+
     db.command({
         'collMod': 'users',
         'validator': validation,
         'validationLevel': 'strict'
     })
-    
+
     db.users.create_index([('username', ASCENDING)], unique=True)
     db.users.create_index([('email', ASCENDING)], unique=True, sparse=True)
 
@@ -227,12 +227,12 @@ def create_initial_admin(db):
     """Create initial admin user."""
     import hashlib
     from datetime import datetime
-    
+
     # Simple password hashing using SHA-256 (sufficient for development)
     # For production, use a proper password hashing library with salt
     password = 'admin'
     hashed_password = hashlib.sha256(password.encode()).hexdigest()
-    
+
     admin_user = {
         'username': 'admin',
         'email': 'admin@yolo-datasets.com',
@@ -246,7 +246,7 @@ def create_initial_admin(db):
             'theme': 'light'
         }
     }
-    
+
     # Insert if not exists
     if not db.users.find_one({'username': 'admin'}):
         db.users.insert_one(admin_user)
@@ -293,18 +293,18 @@ def init_annotations_collection(db):
             }
         }
     }
-    
+
     try:
         db.create_collection('annotations')
     except CollectionInvalid:
         pass
-    
+
     db.command({
         'collMod': 'annotations',
         'validator': validation,
         'validationLevel': 'strict'
     })
-    
+
     # Create indexes for annotations
     db.annotations.create_index([('image_id', ASCENDING)])
     db.annotations.create_index([('dataset_id', ASCENDING)])
@@ -321,7 +321,7 @@ def init_annotation_stats_collection(db):
         db.create_collection('annotation_stats')
     except CollectionInvalid:
         pass
-    
+
     db.annotation_stats.create_index([('dataset_id', ASCENDING), ('date', DESCENDING)])
     db.annotation_stats.create_index([('date', DESCENDING)])
 

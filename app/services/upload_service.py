@@ -5,9 +5,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
+from PIL import Image
 from bson import ObjectId
 from fastapi import HTTPException, status
-from PIL import Image
 
 from app.models.dataset import Dataset
 from app.services import dataset_service, image_service, minio_service
@@ -53,7 +53,7 @@ class UploadService:
                 )
 
             dataset_root = resolve_target_directory(zip_path)
-            
+
             dataset_yaml_path = yolo_validator.find_dataset_yaml(str(dataset_root))
 
             yaml_data = yolo_validator.parse_dataset_yaml(str(dataset_yaml_path))

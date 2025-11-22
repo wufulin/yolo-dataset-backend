@@ -20,7 +20,7 @@ __all__ = [
     "extract_skip_root_safe",
     "resolve_target_directory",
     "ensure_directory",
-    "safe_remove", 
+    "safe_remove",
     "get_file_hash",
     "get_file_size",
     "is_valid_filename",

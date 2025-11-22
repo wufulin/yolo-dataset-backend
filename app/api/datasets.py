@@ -2,7 +2,6 @@
 from datetime import datetime
 from typing import Optional
 
-
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from app.auth import authenticate_user
@@ -26,16 +25,16 @@ async def create_dataset(
 ):
     """
     Create a new dataset.
-    
+
     Args:
         dataset_data: Dataset creation data
         username: Authenticated username
-        
+
     Returns:
         DatasetResponse: Created dataset information
     """
     logger.info(f"Creating dataset '{dataset_data.name}' of type '{dataset_data.dataset_type}' by user '{username}'")
-    
+
     # Validate dataset_type
     valid_types = ['detect', 'obb', 'segment', 'pose', 'classify']
     if dataset_data.dataset_type not in valid_types:
@@ -44,7 +43,7 @@ async def create_dataset(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Invalid dataset_type. Must be one of: {', '.join(valid_types)}"
         )
-    
+
     # Create Dataset model
     dataset = Dataset(
         name=dataset_data.name,
@@ -63,11 +62,11 @@ async def create_dataset(
         updated_at=datetime.utcnow(),
         version=1
     )
-    
+
     try:
         # Create dataset in MongoDB
         dataset_id = dataset_service.create_dataset(dataset)
-        
+
         # Retrieve and return created dataset
         created_dataset = dataset_service.get_dataset(dataset_id)
         if not created_dataset:
@@ -76,7 +75,7 @@ async def create_dataset(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"Failed to retrieve created dataset with ID: {dataset_id}"
             )
-        
+
         logger.info(f"Dataset '{dataset_data.name}' created successfully with ID: {dataset_id}")
         return DatasetResponse(**created_dataset)
     except HTTPException:
@@ -99,21 +98,21 @@ async def list_datasets(
 ):
     """
     List all datasets with pagination.
-    
+
     Args:
         page: Page number (starting from 1)
         page_size: Number of items per page
-        
+
     Returns:
         PaginatedResponse: Paginated list of datasets
     """
     logger.info(f"Listing datasets: page={page}, page_size={page_size}")
     skip = (page - 1) * page_size
-    
+
     try:
         datasets = dataset_service.list_datasets(skip=skip, limit=page_size)
         total = dataset_service.datasets.count_documents({})
-        
+
         logger.info(f"Retrieved {len(datasets)} datasets (total: {total})")
         return PaginatedResponse(
             items=datasets,
@@ -137,15 +136,15 @@ async def get_dataset(
 ):
     """
     Get dataset by ID.
-    
+
     Args:
         dataset_id: Dataset ID
-        
+
     Returns:
         DatasetResponse: Dataset information
     """
     logger.info(f"Retrieving dataset with ID: {dataset_id}")
-    
+
     try:
         dataset = dataset_service.get_dataset(dataset_id)
         if not dataset:
@@ -154,7 +153,7 @@ async def get_dataset(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Dataset not found"
             )
-        
+
         logger.info(f"Retrieved dataset: {dataset.get('name', 'Unknown')} (ID: {dataset_id})")
         return DatasetResponse(**dataset)
     except HTTPException:
@@ -177,18 +176,18 @@ async def get_dataset_images(
 ):
     """
     Get images for a specific dataset.
-    
+
     Args:
         dataset_id: Dataset ID
         page: Page number
         page_size: Page size
         split: Optional split filter
-        
+
     Returns:
         PaginatedResponse: Paginated list of images
     """
     logger.info(f"Getting images for dataset {dataset_id}: page={page}, page_size={page_size}, split={split}")
-    
+
     try:
         # Verify dataset exists
         dataset = dataset_service.get_dataset(dataset_id)
@@ -198,18 +197,18 @@ async def get_dataset_images(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Dataset not found"
             )
-        
+
         skip = (page - 1) * page_size
         images = image_service.get_images_by_dataset(
             dataset_id, skip=skip, limit=page_size, split=split
         )
-        
+
         # Generate presigned URLs for images
         for image in images:
             image["file_url"] = minio_service.get_file_url(image["file_path"])
-        
+
         total = image_service.count_images(dataset_id, split=split)
-        
+
         logger.info(f"Retrieved {len(images)} images for dataset {dataset_id} (total: {total})")
         return PaginatedResponse(
             items=images,
@@ -235,15 +234,15 @@ async def get_image(
 ):
     """
     Get image by ID with annotations.
-    
+
     Args:
         image_id: Image ID
-        
+
     Returns:
         ImageResponse: Image information with annotations
     """
     logger.info(f"Retrieving image with ID: {image_id}")
-    
+
     try:
         image = image_service.get_image(image_id)
         if not image:
@@ -252,10 +251,10 @@ async def get_image(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Image not found"
             )
-        
+
         # Generate presigned URL
         image["file_url"] = minio_service.get_file_url(image["file_path"])
-        
+
         logger.info(f"Retrieved image {image_id} from dataset {image.get('dataset_id', 'Unknown')}")
         return ImageResponse(**image)
     except HTTPException:

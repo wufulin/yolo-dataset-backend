@@ -16,7 +16,7 @@ class ImageResponse(BaseModel):
     split: str = Field(..., description="Dataset split")
     annotations: List[Dict[str, Any]] = Field(..., description="Image annotations")
     created_at: datetime = Field(..., description="Creation timestamp")
-    
+
     model_config = {
         "from_attributes": True,
         "populate_by_name": True

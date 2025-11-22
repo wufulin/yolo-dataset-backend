@@ -22,26 +22,26 @@ class Dataset(BaseModel):
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
     version: int = Field(1, ge=1, description="Dataset version")
-    
+
     @staticmethod
     def get_current_time() -> datetime:
         """Get current UTC time."""
         return datetime.utcnow()
-    
+
     @validator('dataset_type')
     def validate_dataset_type(cls, v):
         """Validate dataset type."""
         if v not in ['detect', 'obb', 'segment', 'pose', 'classify']:
             raise ValueError('dataset_type must be one of: detect, obb, segment, pose, classify')
         return v
-    
-    @validator('status') 
+
+    @validator('status')
     def validate_status(cls, v):
         """Validate status."""
         if v not in ['processing', 'active', 'error', 'deleted']:
             raise ValueError('status must be one of: processing, active, error, deleted')
         return v
-    
+
     model_config = {
         "arbitrary_types_allowed": True,
         "json_schema_extra": {

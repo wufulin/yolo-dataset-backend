@@ -15,7 +15,7 @@ def authenticate_user(credentials: HTTPBasicCredentials = Depends(security)):
     """Authenticate user using HTTP Basic auth."""
     correct_username = secrets.compare_digest(credentials.username, "admin")
     correct_password = secrets.compare_digest(credentials.password, "admin")
-    
+
     if not (correct_username and correct_password):
         logger.error(f"Failed authentication attempt for username: {credentials.username}")
         raise HTTPException(
@@ -23,6 +23,6 @@ def authenticate_user(credentials: HTTPBasicCredentials = Depends(security)):
             detail="Incorrect username or password",
             headers={"WWW-Authenticate": "Basic"},
         )
-    
+
     logger.info(f"User '{credentials.username}' authenticated successfully")
     return credentials.username

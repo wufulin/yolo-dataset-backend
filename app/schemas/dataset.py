@@ -11,7 +11,7 @@ class DatasetCreate(BaseModel):
     description: Optional[str] = Field(None, max_length=500, description="Dataset description")
     dataset_type: str = Field(..., description="Dataset type: detect/obb/segment/pose/classify")
     class_names: Optional[List[str]] = Field(default=[], description="List of class names (optional)")
-    
+
     class Config:
         json_schema_extra = {
             "example": {
@@ -35,7 +35,7 @@ class DatasetResponse(BaseModel):
     splits: Dict[str, int] = Field(..., description="Split counts")
     created_at: datetime = Field(..., description="Creation timestamp")
     updated_at: datetime = Field(..., description="Update timestamp")
-    
+
     model_config = {
         "from_attributes": True,
         "populate_by_name": True

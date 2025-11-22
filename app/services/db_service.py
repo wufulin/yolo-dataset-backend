@@ -13,15 +13,15 @@ logger = get_logger(__name__)
 
 class DatabaseService:
     """Service class for MongoDB connection management (Singleton)."""
-    
+
     _instance: Optional['DatabaseService'] = None
-    
+
     def __new__(cls, *args, **kwargs):
         """Ensure only one instance is created."""
         if cls._instance is None:
             cls._instance = super(DatabaseService, cls).__new__(cls)
         return cls._instance
-    
+
     def __init__(self, max_pool_size: int = 50, retry_writes: bool = True):
         """Initialize MongoDB client with connection pooling."""
         # Prevent re-initialization if already initialized
@@ -36,7 +36,7 @@ class DatabaseService:
             connectTimeoutMS=5000
         )
         self.db = self.client[settings.mongo_db_name]
-        
+
         # Collections
         self.datasets = self.db.datasets
         self.images = self.db.images
@@ -44,10 +44,10 @@ class DatabaseService:
         self.dataset_statistics = self.db.dataset_statistics
         self.users = self.db.users
         self.annotations = self.db.annotations
-        
+
         # Test connection
         self._test_connection()
-    
+
     def _test_connection(self):
         """Test database connection."""
         try:
@@ -56,23 +56,23 @@ class DatabaseService:
         except PyMongoError as e:
             logger.error(f"Failed to connect to MongoDB: {e}")
             raise Exception(f"Failed to connect to MongoDB: {e}")
-            
+
     def close(self):
         """Close database connection."""
         if self.client:
             self.client.close()
             logger.info("MongoDB connection closed")
-    
+
     def convert_objectids_to_str(self, doc: Dict[str, Any]) -> None:
         """
         Recursively convert ObjectId fields to strings in a document.
-        
+
         Args:
             doc: Document dictionary to process (modified in place)
         """
         if not isinstance(doc, dict):
             return
-        
+
         for key, value in list(doc.items()):
             if isinstance(value, ObjectId):
                 doc[key] = str(value)

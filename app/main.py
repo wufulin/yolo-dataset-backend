@@ -1,10 +1,9 @@
 """Main FastAPI application."""
-from fastapi import Depends, FastAPI, Request
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.api import datasets, upload
-from app.auth import authenticate_user
 from app.config import settings
 from app.utils.logger import get_logger
 
@@ -20,7 +19,7 @@ def create_application() -> FastAPI:
         docs_url="/docs",
         redoc_url="/redoc"
     )
-    
+
     # Add CORS middleware
     application.add_middleware(
         CORSMiddleware,
@@ -29,7 +28,7 @@ def create_application() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
-    
+
     # Add global exception handler
     @application.exception_handler(Exception)
     async def global_exception_handler(request: Request, exc: Exception):
@@ -38,7 +37,7 @@ def create_application() -> FastAPI:
             status_code=500,
             content={"detail": "Internal server error"}
         )
-    
+
     # Include routers
     application.include_router(
         datasets.router,
@@ -50,9 +49,9 @@ def create_application() -> FastAPI:
         prefix="/api/v1",
         tags=["upload"]
     )
-    
+
     logger.info(f"Application '{settings.app_name}' v{settings.app_version} created successfully")
-    
+
     return application
 
 
